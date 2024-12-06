@@ -1,0 +1,51 @@
+[project]
+name = "g-led"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+]
+requires-python = ">=3.9"
+dependencies = [
+    "beartype>=0.19.0",
+    "einops-exts>=0.0.4",
+    "einops>=0.8.0",
+    "kornia>=0.7.4",
+    "lightning>=2.2.5",
+    "numpy<2",
+    "seaborn>=0.13.2",
+    "torch==1.13.1",
+    "torchvision==0.14.1",
+    "tqdm>=4.67.1",
+    "transformers>=4.47.0",
+    "pytorch-warmup>=0.2.0",
+    "datasets>=3.1.0",
+    "ema-pytorch>=0.5.3",
+    "accelerate>=1.1.1",
+    "pydantic>=2.10.3",
+    "imagen-pytorch==1.25.9",
+]
+
+[project.scripts]
+g-led = "g_led:main"
+
+[tool.uv]
+index-strategy = "unsafe-best-match"
+link-mode = "symlink"
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cu116" },
+]
+torchvision = [
+  { index = "pytorch-cu116" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu116"
+url = "https://download.pytorch.org/whl/cu116"
+explicit = true
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

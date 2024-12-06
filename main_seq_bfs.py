@@ -1,5 +1,6 @@
 # General Package
 import argparse
+from pathlib import Path
 import sys
 import pdb
 from datetime import datetime
@@ -12,7 +13,8 @@ from torch.utils.data import DataLoader
 sys.path.insert(0, './util')
 from utils import save_args
 sys.path.insert(0, './data')
-from data_bfs_preprocess import bfs_dataset 
+from data_bfs_preprocess import bfs_dataset
+import data_bfs_preprocess
 sys.path.insert(0, './transformer')
 from sequentialModel import SequentialModel as transformer
 sys.path.insert(0, './train_test_seq')
@@ -28,14 +30,15 @@ class Args:
         self.parser.add_argument("--dataset",
                                  default='bfs_les',
                                  help='name it')
-        self.parser.add_argument("--data_location", 
-                                 default = ['./data/data0.npy',
-                                            './data/data1.npy'],
+        self.parser.add_argument("--data_dir", default='/root/workspace/out/diffusion-dynamics/G-LED/data')
+        self.parser.add_argument("--data_location",
+                                 default = ['/root/workspace/out/diffusion-dynamics/G-LED/data/data0.npy',
+                                            '/root/workspace/out/diffusion-dynamics/G-LED/data/data1.npy'],
                                  help='the relative or abosolute data.npy file')
-        self.parser.add_argument("--trajec_max_len", 
+        self.parser.add_argument("--trajec_max_len",
                                  default=41,
                                  help = 'max seq_length (per seq) to train the model')
-        self.parser.add_argument("--start_n", 
+        self.parser.add_argument("--start_n",
                                  default=0,
                                  help = 'the starting step of the data')
         self.parser.add_argument("--n_span",
@@ -44,24 +47,24 @@ class Args:
 
 
 
-        self.parser.add_argument("--trajec_max_len_valid", 
+        self.parser.add_argument("--trajec_max_len_valid",
                                  default=450,
                                  help = 'max seq_length (per seq) to valid the model')
-        self.parser.add_argument("--start_n_valid", 
+        self.parser.add_argument("--start_n_valid",
                                  default=8000,
                                  help = 'the starting step of the data')
         self.parser.add_argument("--n_span_valid",
                                  default=500,
                                  help='the total step of the data from the staring step')
-               
+
 
         """
         for model
         """
-        self.parser.add_argument("--n_layer", 
+        self.parser.add_argument("--n_layer",
                                  default =8,#8
                                  help = 'number of attention layer')
-        self.parser.add_argument("--output_hidden_states", 
+        self.parser.add_argument("--output_hidden_states",
                                  default= True,
                                  help='out put hidden matrix')
         self.parser.add_argument("--output_attentions",
@@ -70,32 +73,32 @@ class Args:
         self.parser.add_argument("--n_ctx",
                                  default = 40,
                                  help='number steps transformer can look back at')
-        self.parser.add_argument("--n_embd", 
+        self.parser.add_argument("--n_embd",
                                  default = 2048,
-                                 help='The hidden state dim transformer to predict') 
-        self.parser.add_argument("--n_head", 
+                                 help='The hidden state dim transformer to predict')
+        self.parser.add_argument("--n_head",
                                  default = 4,
                                  help='number of head per layer')
         self.parser.add_argument("--embd_pdrop",
                                  default = 0.0,
                                  help='T.B.D')
-        self.parser.add_argument("--layer_norm_epsilon", 
+        self.parser.add_argument("--layer_norm_epsilon",
                                  default=1e-5,
                                  help='############ Do not change')
-        self.parser.add_argument("--attn_pdrop", 
+        self.parser.add_argument("--attn_pdrop",
                                  default = 0.0,
                                  help='T.B.D')
-        self.parser.add_argument("--resid_pdrop", 
+        self.parser.add_argument("--resid_pdrop",
                                  default = 0.0,
                                  help='T.B.D')
-        self.parser.add_argument("--activation_function", 
+        self.parser.add_argument("--activation_function",
                                  default = "relu",
                                  help='Trust OpenAI and Nick')
-        self.parser.add_argument("--initializer_range", 
+        self.parser.add_argument("--initializer_range",
                                  default = 0.02,
                                  help='Trust OpenAI and Nick')
-        
-        
+
+
         """
         for training
         """
@@ -115,32 +118,32 @@ class Args:
                                  default=True,
                                  help = 'shuffle the batch')
         self.parser.add_argument("--device",
-                                 default='cuda:1')
-        self.parser.add_argument("--epoch_num", 
+                                 default='cuda:0')
+        self.parser.add_argument("--epoch_num",
                                  default = 10000,
                                  help='epoch_num')
-        self.parser.add_argument("--learning_rate", 
+        self.parser.add_argument("--learning_rate",
                                  default = 1e-4,
                                  help='learning rate')
         self.parser.add_argument("--gamma",
                                  default=0.99083194489,
                                  help='learning rate decay')
-        
+
         self.parser.add_argument("--coarse_dim",
                                  default=[32,32],
                                  help='the coarse shape (hidden) of transformer')
         self.parser.add_argument('--coarse_mode',
                                  default='bilinear',
                                  help='the way of downsampling the snpashot')
-        self.parser.add_argument("--march_tol", 
+        self.parser.add_argument("--march_tol",
                                  default=0.01,
                                  help='march threshold for Nt + 1')
-        
+
     def update_args(self):
         args = self.parser.parse_args()
         args.time = '{0:%Y_%m_%d_%H_%M_%S}'.format(datetime.now())
         # output dataset
-        args.dir_output = 'output/'
+        args.dir_output = '/root/workspace/out/diffusion-dynamics/G-LED/runs/output'
         args.fname = args.dataset + '_' +args.time
         args.experiment_path = args.dir_output + args.fname
         args.model_save_path = args.experiment_path + '/' + 'model_save/'
@@ -169,64 +172,88 @@ if __name__ == '__main__':
     """
     assert args.coarse_dim[0]*args.coarse_dim[1]*2 == args.n_embd
     #assert args.trajec_max_len_valid == args.n_ctx + 1
-    
+
     """
     fetch data
     """
     print('Start data_set')
-    tic = time.time()
-    data_set_train = bfs_dataset(data_location  = args.data_location,
-                                 trajec_max_len = args.trajec_max_len,
-                                 start_n        = args.start_n,
-                                 n_span         = args.n_span)
-    data_set_test_on_train = bfs_dataset(data_location  = args.data_location,
-                                         trajec_max_len = args.trajec_max_len_valid,
-                                         start_n        = args.start_n,
-                                         n_span         = args.n_span)
-    data_set_valid = bfs_dataset(data_location  = args.data_location,
-                                 trajec_max_len = args.trajec_max_len_valid,
-                                 start_n        = args.start_n_valid,
-                                 n_span         = args.n_span_valid)
-    data_loader_train = DataLoader(dataset    = data_set_train,
-                                   shuffle    = args.shuffle,
-                                   batch_size = args.batch_size)
-    data_loader_test_on_train = DataLoader(dataset    = data_set_test_on_train,
-                                           shuffle    = args.shuffle,
-                                           batch_size = args.batch_size_valid)
-    data_loader_valid = DataLoader(dataset    = data_set_valid,
-                                   shuffle    = args.shuffle,
-                                   batch_size = args.batch_size_valid)
-    print('Done data-set use time ', time.time() - tic)
+    dl = data_bfs_preprocess.BackwardFacingStep(
+        Path(args.data_dir),
+        trajectory_max_lens=dict(
+            train=args.trajec_max_len,
+            val=args.trajec_max_len_valid,
+        ),
+        solution_start_times=dict(
+            train=args.start_n,
+            val=args.start_n_valid,
+        ),
+        solution_end_times=dict(
+            train=args.start_n + args.n_span,
+            val=args.start_n_valid + args.n_span_valid,
+        ),
+        batch_sizes=dict(
+            train=args.batch_size,
+            val=args.batch_size_valid//4,  # EDIT: reduce batch size for GPU memory; doing this changes how many trajectories are used for validation. Need to update their code to fix this.
+        ),
+    )
+    dl.setup('fit')
+    data_loader_train = dl.train_dataloader()
+    dl_val = dl.val_dataloader(combined=False)
+    data_loader_test_on_train = dl_val['val_on_train']
+    data_loader_valid = dl_val['val']
+    # tic = time.time()
+    # data_set_train = bfs_dataset(data_location  = args.data_location,
+    #                              trajec_max_len = args.trajec_max_len,
+    #                              start_n        = args.start_n,
+    #                              n_span         = args.n_span)
+    # data_set_test_on_train = bfs_dataset(data_location  = args.data_location,
+    #                                      trajec_max_len = args.trajec_max_len_valid,
+    #                                      start_n        = args.start_n,
+    #                                      n_span         = args.n_span)
+    # data_set_valid = bfs_dataset(data_location  = args.data_location,
+    #                              trajec_max_len = args.trajec_max_len_valid,
+    #                              start_n        = args.start_n_valid,
+    #                              n_span         = args.n_span_valid)
+    # data_loader_train = DataLoader(dataset    = data_set_train,
+    #                                shuffle    = args.shuffle,
+    #                                batch_size = args.batch_size)
+    # data_loader_test_on_train = DataLoader(dataset    = data_set_test_on_train,
+    #                                        shuffle    = args.shuffle,
+    #                                        batch_size = args.batch_size_valid)
+    # data_loader_valid = DataLoader(dataset    = data_set_valid,
+    #                                shuffle    = args.shuffle,
+    #                                batch_size = args.batch_size_valid)
+    # print('Done data-set use time ', time.time() - tic)
     """
     create model
     """
     model = transformer(args).to(args.device).float()
     print('Number of parameters: {}'.format(model._num_parameters()))
-    
+
     """
     create loss function
     """
     loss_func = torch.nn.MSELoss()
-    
+
     """
     create optimizer
     """
-    optimizer = torch.optim.Adam(model.parameters(), 
+    optimizer = torch.optim.Adam(model.parameters(),
                                 lr=args.learning_rate)
     """
     create scheduler
     """
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
                                                 step_size=1,
-                                                gamma=args.gamma)    
+                                                gamma=args.gamma)
     """
     train
     """
-    train_seq_shift(args=args, 
-                    model=model, 
-                    data_loader=data_loader_train, 
+    train_seq_shift(args=args,
+                    model=model,
+                    data_loader=data_loader_train,
                     data_loader_copy = data_loader_test_on_train,
                     data_loader_valid = data_loader_valid,
-                    loss_func=loss_func, 
+                    loss_func=loss_func,
                     optimizer=optimizer,
                     scheduler=scheduler)
