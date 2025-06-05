@@ -8,13 +8,13 @@ from torch.utils.data import DataLoader
 import torch
 import numpy as np
 import json
+from imagen_pytorch import Unet3D, ElucidatedImagen, ImagenTrainer
 
 
 """
 Internal pacakage
 """
 from main_seq_bfs import Args as SEQ_ARGS
-from mimagen_pytorch import Unet3D, ElucidatedImagen, ImagenTrainer
 
 sys.path.insert(0, './util')
 from utils import save_args, read_args_txt
