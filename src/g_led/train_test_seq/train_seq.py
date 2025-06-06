@@ -1,12 +1,10 @@
-import pdb
+import time
+
 import torch
 from tqdm import tqdm
-from test_seq import test_epoch
-import os
-import time
-import sys
-sys.path.insert(0, './util')
-from utils import save_model
+
+from g_led.train_test_seq.test_seq import test_epoch
+from g_led.utils import save_model
 
 
 def train_seq_shift(args,
@@ -71,7 +69,7 @@ def train_epoch(args,
                 down_sampler):
     print('Nit = ',len(data_loader))
     for iteration, batch in tqdm(enumerate(data_loader)):
-        batch = batch.to(args.device).float()
+        batch = batch.float().to(args.device)
 
         b_size = batch.shape[0]
         num_time = batch.shape[1]

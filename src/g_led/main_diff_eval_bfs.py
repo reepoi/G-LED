@@ -1,23 +1,17 @@
 import argparse
 import os
-import sys
-from torch.utils.data import DataLoader
+
 import torch
-from imagen_pytorch import Unet3D, ElucidatedImagen, ImagenTrainer
+from imagen_pytorch import ElucidatedImagen, ImagenTrainer, Unet3D
+from torch.utils.data import DataLoader
 
-from main_seq_bfs import Args as Args_seq
-from main_diff_bfs import Args as Args_diff
-
-sys.path.insert(0, './util')
-from utils import read_args_txt
-sys.path.insert(0, './data')
-from data_bfs_preprocess import bfs_dataset
-sys.path.insert(0, './transformer')
-from sequentialModel import SequentialModel as transformer
-sys.path.insert(0, './train_test_spatial')
-from test_diff import test_final_overall
-from test_diff_ensamble import test_final_overall_ensamble
-
+from g_led.data.data_bfs_preprocess import bfs_dataset
+from g_led.main_diff_bfs import Args as Args_diff
+from g_led.main_seq_bfs import Args as Args_seq
+from g_led.train_test_spatial.test_diff import test_final_overall
+from g_led.train_test_spatial.test_diff_ensamble import test_final_overall_ensamble
+from g_led.transformer.sequentialModel import SequentialModel as transformer
+from g_led.utils import read_args_txt
 
 
 class Args_final_eval:
@@ -120,7 +114,7 @@ if __name__ == '__main__':
 	"""
 	Fetch models
 	"""
-	model = transformer(args_seq).to(args_final.device).float()
+	model = transformer(args_seq).float().to(args_final.device)
 	print('Number of parameters: {}'.format(model._num_parameters()))
 	if args_final.use_best:
 		model.load_state_dict(torch.load(args_seq.current_model_save_path+'best_model_sofar'))

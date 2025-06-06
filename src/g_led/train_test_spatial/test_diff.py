@@ -1,33 +1,30 @@
-from tqdm import tqdm
-import torch
+import os
 import pdb
-import sys
-import os
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib
 import pickle
-import os
 
-sys.path.insert(0, './util')
-from utils import save_loss
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+from tqdm import tqdm
 
-def test_final_overall(args_final, 
-					   args_seq, 
-					   args_diff, 
-					   trainer, 
+
+def test_final_overall(args_final,
+					   args_seq,
+					   args_diff,
+					   trainer,
 					   seq_model,
 					   data_loader):
-	down_sampler = torch.nn.Upsample(size=args_seq.coarse_dim, 
+	down_sampler = torch.nn.Upsample(size=args_seq.coarse_dim,
 									 mode=args_seq.coarse_mode)
-	up_sampler   = torch.nn.Upsample(size=[512, 512], 
+	up_sampler   = torch.nn.Upsample(size=[512, 512],
 									 mode=args_seq.coarse_mode)
-	#max_mre,min_mre, mean_mre, sigma3 = 
-	test_final(args_final, 
-			   args_seq, 
-			   args_diff, 
-			   trainer, 
-			   seq_model, 
+	#max_mre,min_mre, mean_mre, sigma3 =
+	test_final(args_final,
+			   args_seq,
+			   args_diff,
+			   trainer,
+			   seq_model,
 			   data_loader,
 			   down_sampler,
 			   up_sampler)
@@ -37,11 +34,11 @@ def test_final_overall(args_final,
 	#print('#### 3 sigma ####=',sigma3)
 	pdb.set_trace()
 
-def test_final(args_final, 
-			   args_seq, 
-			   args_diff, 
-			   trainer, 
-			   model, 
+def test_final(args_final,
+			   args_seq,
+			   args_diff,
+			   trainer,
+			   model,
 			   data_loader,
 			   down_sampler,
 			   up_sampler,
@@ -64,7 +61,7 @@ def test_final(args_final,
 		REs_fine = []
 		print('total ite', len(data_loader))
 		for iteration, batch in tqdm(enumerate(data_loader)):
-			batch = batch.to(args_final.device).float()
+			batch = batch.float().to(args_final.device)
 			b_size = batch.shape[0]
 			assert b_size == 1
 			num_time = batch.shape[1]
@@ -72,20 +69,20 @@ def test_final(args_final,
 			batch = batch.reshape([b_size*num_time, num_velocity, 512, 512])
 
 
-			batch_coarse = down_sampler(batch).reshape([b_size, 
-														num_time, 
+			batch_coarse = down_sampler(batch).reshape([b_size,
+														num_time,
 														num_velocity,
-														args_seq.coarse_dim[0], 
+														args_seq.coarse_dim[0],
 														args_seq.coarse_dim[1]])
-			
-			
-			batch_coarse_flatten = batch_coarse.reshape([b_size, 
+
+
+			batch_coarse_flatten = batch_coarse.reshape([b_size,
 														 num_time,
 														 num_velocity * args_seq.coarse_dim[0] * args_seq.coarse_dim[1]])
-			
+
 			past = None
 			xn = batch_coarse_flatten[:,0:1,:]
-			previous_len = 1 
+			previous_len = 1
 			mem = []
 			for j in tqdm(range(Nt)):
 				if j == 0:
@@ -119,7 +116,7 @@ def test_final(args_final,
 									   args_seq.coarse_dim[0],
 									   args_seq.coarse_dim[1]])
 
-				
+
 
 				assert prediction.shape[0] == truth.shape[0] == 1
 				bsize_here = 1
@@ -133,7 +130,7 @@ def test_final(args_final,
 				prediction_macro = prediction_macro.permute([0,2,1,3,4])
 				truth_macro      = truth_macro.permute([0,2,1,3,4])
 				truth_micro      = batch.permute([1,0,2,3]).unsqueeze(0)[:,:,1:]
-				
+
 				recon_micro = []
 				prediction_micro = []
 				#pdb.set_trace()
@@ -145,7 +142,7 @@ def test_final(args_final,
 				recon_micro = torch.cat(recon_micro,dim=2)
 				prediction_micro = torch.cat(prediction_micro,dim=2)
 				pdb.set_trace()
-				
+
 				seq_name = 'batch'+str(iteration)+'sample'+str(i)
 				try:
 					os.makedirs(contour_dir+'/'+seq_name)
@@ -158,7 +155,7 @@ def test_final(args_final,
 					   "truth_macro":truth_macro.detach().cpu().numpy(),
 					   "prediction_macro":prediction_macro.detach().cpu().numpy()}
 				pickle.dump(DIC, open(contour_dir+'/'+seq_name+"/DIC.npy", 'wb'), protocol=4)
-				
+
 				for d in tqdm(range(num_velocity+1)):
 					try:
 						os.makedirs(contour_dir+'/'+seq_name+'/'+str(d))
@@ -191,13 +188,13 @@ def test_final(args_final,
 						axes[0].set_title('LED Macro')
 						axes[0].set_ylabel('y')
 						axes[0].set_xticks([])
-						
+
 						im1 = axes[1].imshow(velo_macro_truth[:,:],extent=[0,10,0,2], cmap = 'jet',interpolation=None,norm=norm)
 						axes[1].set_title('Truth Macro')#,rotation=-90, position=(1, -1), ha='left', va='center')
 						axes[1].set_ylabel('y')
 						axes[1].set_xticks([])
 
-						
+
 						im2 = axes[2].imshow(velo_micro_led[:,:],extent=[0,10,0,2], cmap = 'jet',interpolation='bicubic',norm=norm)
 						axes[2].set_title('LED Micro')#,rotation=-90, position=(1, -1), ha='left', va='center')
 						axes[2].set_ylabel('y')
@@ -212,7 +209,7 @@ def test_final(args_final,
 						axes[4].set_title('Truth Micro')#,rotation=-90, position=(1, -1), ha='left', va='center')
 						axes[4].set_xlabel('x')
 						axes[4].set_ylabel('y')
-						
+
 						fig.subplots_adjust(right=0.8)
 						fig.colorbar(im0,orientation="vertical",ax = axes)
 						#fig.set_size_inches(20, 15, forward=True)
@@ -231,7 +228,7 @@ def test_final(args_final,
 			# 	data = mem[i].cpu().numpy()
 			# 	X_AR = batch_coarse_merge_spatial[i,previous_len:previous_len+Nt+1,:].cpu().numpy()
 			# 	data = data.reshape([-1,16])
-			# 	X_AR = X_AR.reshape([-1,16])	
+			# 	X_AR = X_AR.reshape([-1,16])
 			# 	pdb.set_trace()
 
 			# 	mem  = mem.reshape([mem.shape[0],
@@ -240,9 +237,9 @@ def test_final(args_final,
 			# 									mem.shape[2]])
 			# mem2fine = []
 			# for nc in range(int(mem.shape[2]/args_diff.Nt)):
-			# 	mem2fine.append(up_sampler(mem[:,:,nc*args_diff.Nt:(nc+1)*args_diff.Nt])) 
+			# 	mem2fine.append(up_sampler(mem[:,:,nc*args_diff.Nt:(nc+1)*args_diff.Nt]))
 			# mem2fine = torch.cat(mem2fine,dim=2)
-			
+
 			# mem2fine = mem2fine.reshape([mem2fine.shape[0],
 			# 								1,
 			# 								1,
@@ -253,25 +250,25 @@ def test_final(args_final,
 
 
 """
-def test_final(args_final, 
-			   args_seq, 
-			   args_diff, 
-			   trainer, 
-			   model, 
+def test_final(args_final,
+			   args_seq,
+			   args_diff,
+			   trainer,
+			   model,
 			   data_loader,
 			   down_sampler,up_sampler):
 	print('Iteration is ', len(data_loader))
 	IDHistory = [i for i in range(1, args_seq.n_ctx)]
 	with torch.no_grad():
-		for iteration, batch in tqdm(enumerate(data_loader)):	
+		for iteration, batch in tqdm(enumerate(data_loader)):
 			batch_coarse = down_sampler(batch)
 			bcfs = [batch_coarse.shape[0],batch_coarse.shape[1],args_seq.coarse_dim[0]*args_seq.coarse_dim[1]]
 			batch_coarse_flatten = batch_coarse.reshape(bcfs)
 
-			
 
 
-			
+
+
 			bffs = [batch.shape[0], batch.shape[1], 64]
 			batch_fine_flatten   = batch.reshape(bffs)
 
@@ -286,7 +283,7 @@ def test_final(args_final,
 			else:
 				past = None
 				xn = coarse_one[:,0:1,:]
-				previous_len = 1 
+				previous_len = 1
 			mem = []
 			for j in tqdm(range(args_final.test_Nt-1)):
 				if j == 0:
@@ -302,7 +299,7 @@ def test_final(args_final,
 				mem.append(xn)
 			mem=torch.cat([coarse_one[:,0:1,:]]+mem,dim=1)
 
-			
+
 
 
 			mem  = mem.reshape([mem.shape[0],
@@ -311,9 +308,9 @@ def test_final(args_final,
 												mem.shape[2]])
 			mem2fine = []
 			for nc in range(int(mem.shape[2]/args_diff.Nt)):
-				mem2fine.append(up_sampler(mem[:,:,nc*args_diff.Nt:(nc+1)*args_diff.Nt])) 
+				mem2fine.append(up_sampler(mem[:,:,nc*args_diff.Nt:(nc+1)*args_diff.Nt]))
 			mem2fine = torch.cat(mem2fine,dim=2)
-			
+
 			mem2fine = mem2fine.reshape([mem2fine.shape[0],
 											1,
 											1,
@@ -324,21 +321,21 @@ def test_final(args_final,
 												1,
 												coarse_one.shape[1],
 												coarse_one.shape[2]])
-			
+
 			coarse2fine = []
 
 			for nc in range(int(coarse_one.shape[2]/args_diff.Nt)):
-				coarse2fine.append(up_sampler(coarse_one[:,:,nc*args_diff.Nt:(nc+1)*args_diff.Nt])) 
+				coarse2fine.append(up_sampler(coarse_one[:,:,nc*args_diff.Nt:(nc+1)*args_diff.Nt]))
 			coarse2fine = torch.cat(coarse2fine,dim=2)
-			
-			
+
+
 			fine_one    = batch_fine_flatten[:,:args_final.test_Nt]
 			fine_one    = fine_one.reshape([fine_one.shape[0],
 											1,
 											1,
 											fine_one.shape[1],
 											fine_one.shape[2]])
-			
+
 			coarse2fine = coarse2fine.reshape([fine_one.shape[0],
 											1,
 											1,
@@ -348,9 +345,9 @@ def test_final(args_final,
 			data_led = []
 			for nc in tqdm(range(int(coarse_one.shape[2]/args_diff.Nt))):
 				# B x T x F x H x W
-				les_video_sampled_chunck = trainer.sample(video_frames=1, 
+				les_video_sampled_chunck = trainer.sample(video_frames=1,
 				                                          cond_images=coarse2fine[:,:,:,nc*args_diff.Nt:(nc+1)*args_diff.Nt])
-				les_video_sampled_chunck_led = trainer.sample(video_frames=1, 
+				les_video_sampled_chunck_led = trainer.sample(video_frames=1,
 				                                          cond_images=mem2fine[:,:,:,nc*args_diff.Nt:(nc+1)*args_diff.Nt])
 				data.append(les_video_sampled_chunck[0,0,0].cpu().numpy())
 				data_led.append(les_video_sampled_chunck_led[0,0,0].cpu().numpy())
@@ -358,7 +355,7 @@ def test_final(args_final,
 			data_led = np.vstack(data_led)
 			X_AR = fine_one[0,0,0].cpu().numpy()
 			coarse2fine_np = coarse2fine[0,0,0].cpu().numpy()
-			mem2fine_np    = mem2fine[0,0,0].detach().cpu().numpy()	
+			mem2fine_np    = mem2fine[0,0,0].detach().cpu().numpy()
 
 			asp = data.shape[1]/data.shape[0]*3
 			fig, axes = plt.subplots(nrows=1, ncols=5)
@@ -379,15 +376,15 @@ def test_final(args_final,
 			axes[1].set_xlabel('x')
 			axes[1].set_xticks([])
 			axes[1].set_yticks([])
-			
-			
+
+
 			im2 = axes[2].imshow(X_AR[:,:],aspect=asp, cmap = 'jet',interpolation='bicubic',norm=norm,extent=[0, 16, data.shape[0]*0.25, 0])
 			axes[2].title.set_text('micro \n truth')
 			axes[2].invert_yaxis()
 			axes[2].set_xlabel('x')
 			axes[2].set_yticks([])
 			axes[2].set_xticks([])
-			
+
 			# im2 = axes[3].imshow(np.abs(X_AR-data),aspect=asp, cmap = 'jet',interpolation='bicubic',norm=norm,extent=[0, 16, data.shape[0]*0.25, 0])
 			# axes[3].title.set_text('En/De- \n Coder \n Error')
 			# axes[3].invert_yaxis()
@@ -407,7 +404,7 @@ def test_final(args_final,
 			axes[4].set_xlabel('x')
 			axes[4].set_yticks([])
 			axes[4].set_xticks([])
-			
+
 			fig.subplots_adjust(right=0.8)
 			fig.colorbar(im0,orientation="horizontal",ax = axes)
 			fig.savefig('./batch'+str(iteration)+'sample_kas'+'Nt_read'+str(args_final.Nt_read)+'.png', bbox_inches='tight',dpi=500)
@@ -425,15 +422,15 @@ def test_final(args_final,
 			axes[0].set_xticks([])
 			axes[0].set_yticks([])
 
-			
-			
+
+
 			im2 = axes[2].imshow(X_AR[:,:],aspect=asp, cmap = 'jet',interpolation='bicubic',norm=norm,extent=[0, 16, data.shape[0]*0.25, 0])
 			axes[2].title.set_text('micro \n truth')
 			axes[2].invert_yaxis()
 			axes[2].set_xlabel('x')
 			axes[2].set_yticks([])
 			axes[2].set_xticks([])
-			
+
 			# im2 = axes[3].imshow(np.abs(X_AR-data),aspect=asp, cmap = 'jet',interpolation='bicubic',norm=norm,extent=[0, 16, data.shape[0]*0.25, 0])
 			# axes[3].title.set_text('En/De- \n Coder \n Error')
 			# axes[3].invert_yaxis()
@@ -453,11 +450,11 @@ def test_final(args_final,
 			axes[3].set_xlabel('x')
 			axes[3].set_yticks([])
 			axes[3].set_xticks([])
-			
+
 			fig.subplots_adjust(right=0.8)
 			fig.colorbar(im0,orientation="horizontal",ax = axes)
 			fig.savefig('./batch'+str(iteration)+'sample_kas'+'Nt_read'+str(args_final.Nt_read)+'endecoder.png', bbox_inches='tight',dpi=500)
 			plt.close(fig)
 			pdb.set_trace()
 
-"""			
+"""

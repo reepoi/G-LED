@@ -1,15 +1,15 @@
-import torch
-from tqdm import tqdm
+import argparse
 import json
 import os
+from pathlib import Path
+
+import torch
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib
-import argparse
-import pickle
-import pdb
-from tqdm import tqdm
 
+
+DIR_ROOT = (Path(__file__).parent/'..'/'..').resolve()
+HYDRA_INIT = dict(version_base=None, config_path='../../conf', config_name='conf')
 
 
 def get_data_location(args):
@@ -34,7 +34,7 @@ def save_loss(args, loss_list, Nt):
 	print(os.path.join(args.logging_path, 'loss_curve.png'))
 	plt.savefig(os.path.join(args.logging_path, 'loss_curve.png'))
 	plt.close()
-	np.savetxt(os.path.join(args.logging_path, 'loss_curve.txt'), 
+	np.savetxt(os.path.join(args.logging_path, 'loss_curve.txt'),
 				np.asarray(loss_list))
 
 def save_args(args):
@@ -46,24 +46,24 @@ def save_args_sample(args,name):
 		json.dump(args.__dict__, f, indent=2)
 
 def read_args_txt(args, argtxt):
-	#args.parser.parse_args(namespace=args.update_args_no_folder_create()) 
-	f = open (argtxt, "r")   
+	#args.parser.parse_args(namespace=args.update_args_no_folder_create())
+	f = open (argtxt, "r")
 	args = args.parser.parse_args(namespace=argparse.Namespace(**json.loads(f.read())))
 	return args
 	return t
 
 def save_model(model, args, Nt, bestModel = False):
 	if bestModel:
-		torch.save(model.state_dict(), 
-				   os.path.join(args.model_save_path, 
+		torch.save(model.state_dict(),
+				   os.path.join(args.model_save_path,
 				   'best_model_sofar'))
-		np.savetxt(os.path.join(args.model_save_path, 
+		np.savetxt(os.path.join(args.model_save_path,
 				   'best_model_sofar_Nt'),np.ones(2)*Nt)
 	else:
-		torch.save(model.state_dict(), 
-				os.path.join(args.model_save_path, 
+		torch.save(model.state_dict(),
+				os.path.join(args.model_save_path,
 				'model_epoch_' + str(Nt)))
-	
+
 def load_model(model,args_train,args_sample):
 	if args_sample.usebestmodel:
 		model.load_state_dict(torch.load(args_train.current_model_save_path+'best_model_sofar'))
@@ -128,6 +128,6 @@ if __name__ == '__main__':
 	for k in range(0, num_videos):
 		this_video = videos_to_plot[k-1]
 		axs[k//number_of_sample, k%number_of_sample].imshow(np.sqrt(this_video[0,0,j,:,:]**2 + this_video[0,1,j,:,:]**2))
-		axs[k//number_of_sample, k%number_of_sample].set_xticks([]) 
+		axs[k//number_of_sample, k%number_of_sample].set_xticks([])
 		axs[k//number_of_sample, k%number_of_sample].set_yticks([])
 	plt.savefig('test_space.png',bbox_inches='tight')

@@ -1,33 +1,27 @@
-from tqdm import tqdm
-import torch
+import os
 import pdb
-import sys
-import os
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib
 import pickle
-import os
 
-sys.path.insert(0, './util')
-from utils import save_loss
+import torch
+from tqdm import tqdm
 
-def test_final_overall_ensamble(args_final, 
-								args_seq, 
-								args_diff, 
-								trainer, 
+
+def test_final_overall_ensamble(args_final,
+								args_seq,
+								args_diff,
+								trainer,
 								seq_model,
 								data_loader):
-	down_sampler = torch.nn.Upsample(size=args_seq.coarse_dim, 
+	down_sampler = torch.nn.Upsample(size=args_seq.coarse_dim,
 									 mode=args_seq.coarse_mode)
-	up_sampler   = torch.nn.Upsample(size=[512, 512], 
+	up_sampler   = torch.nn.Upsample(size=[512, 512],
 									 mode=args_seq.coarse_mode)
-	#max_mre,min_mre, mean_mre, sigma3 = 
-	test_final_ensamble(args_final, 
-			   args_seq, 
-			   args_diff, 
-			   trainer, 
-			   seq_model, 
+	#max_mre,min_mre, mean_mre, sigma3 =
+	test_final_ensamble(args_final,
+			   args_seq,
+			   args_diff,
+			   trainer,
+			   seq_model,
 			   data_loader,
 			   down_sampler,
 			   up_sampler)
@@ -37,11 +31,11 @@ def test_final_overall_ensamble(args_final,
 	#print('#### 3 sigma ####=',sigma3)
 	pdb.set_trace()
 
-def test_final_ensamble(args_final, 
-			   args_seq, 
-			   args_diff, 
-			   trainer, 
-			   model, 
+def test_final_ensamble(args_final,
+			   args_seq,
+			   args_diff,
+			   trainer,
+			   model,
 			   data_loader,
 			   down_sampler,
 			   up_sampler,
@@ -65,7 +59,7 @@ def test_final_ensamble(args_final,
 			REs_fine = []
 			print('total ite', len(data_loader))
 			for iteration, batch in tqdm(enumerate(data_loader)):
-				batch = batch.to(args_final.device).float()
+				batch = batch.float().to(args_final.device)
 				b_size = batch.shape[0]
 				assert b_size == 1
 				num_time = batch.shape[1]
@@ -73,20 +67,20 @@ def test_final_ensamble(args_final,
 				batch = batch.reshape([b_size*num_time, num_velocity, 512, 512])
 
 
-				batch_coarse = down_sampler(batch).reshape([b_size, 
-															num_time, 
+				batch_coarse = down_sampler(batch).reshape([b_size,
+															num_time,
 															num_velocity,
-															args_seq.coarse_dim[0], 
+															args_seq.coarse_dim[0],
 															args_seq.coarse_dim[1]])
-				
-				
-				batch_coarse_flatten = batch_coarse.reshape([b_size, 
+
+
+				batch_coarse_flatten = batch_coarse.reshape([b_size,
 															num_time,
 															num_velocity * args_seq.coarse_dim[0] * args_seq.coarse_dim[1]])
-				
+
 				past = None
 				xn = batch_coarse_flatten[:,0:1,:]
-				previous_len = 1 
+				previous_len = 1
 				mem = []
 				for j in tqdm(range(Nt)):
 					if j == 0:
@@ -120,7 +114,7 @@ def test_final_ensamble(args_final,
 										args_seq.coarse_dim[0],
 										args_seq.coarse_dim[1]])
 
-					
+
 
 					assert prediction.shape[0] == truth.shape[0] == 1
 					bsize_here = 1
@@ -134,7 +128,7 @@ def test_final_ensamble(args_final,
 					prediction_macro = prediction_macro.permute([0,2,1,3,4])
 					truth_macro      = truth_macro.permute([0,2,1,3,4])
 					truth_micro      = batch.permute([1,0,2,3]).unsqueeze(0)[:,:,1:]
-					
+
 					recon_micro = []
 					prediction_micro = []
 					#pdb.set_trace()
@@ -146,7 +140,7 @@ def test_final_ensamble(args_final,
 					recon_micro = torch.cat(recon_micro,dim=2)
 					prediction_micro = torch.cat(prediction_micro,dim=2)
 					#pdb.set_trace()
-					
+
 					seq_name = 'batch'+str(iteration)+'sample'+str(i)
 					try:
 						os.makedirs(contour_dir+'/'+seq_name)
@@ -159,8 +153,8 @@ def test_final_ensamble(args_final,
 						"truth_macro":truth_macro.detach().cpu().numpy(),
 						"prediction_macro":prediction_macro.detach().cpu().numpy()}
 					pickle.dump(DIC, open(contour_dir+'/'+seq_name+"/DIC"+str(I)+".npy", 'wb'), protocol=4)
-				
-				
+
+
 
 
 

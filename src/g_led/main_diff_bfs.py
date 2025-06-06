@@ -1,28 +1,15 @@
-from pathlib import Path
-import sys
 import argparse
-import pdb
-from datetime import datetime
 import os
-from torch.utils.data import DataLoader
+from pathlib import Path
+
 import torch
-import numpy as np
-import json
-from imagen_pytorch import Unet3D, ElucidatedImagen, ImagenTrainer
-
-
-"""
-Internal pacakage
-"""
+from imagen_pytorch import ElucidatedImagen, ImagenTrainer, Unet3D
 from main_seq_bfs import Args as SEQ_ARGS
 
-sys.path.insert(0, './util')
-from utils import save_args, read_args_txt
-sys.path.insert(0, './data')
-from data_bfs_preprocess import bfs_dataset
-import data_bfs_preprocess
-sys.path.insert(0, './train_test_spatial')
-from  train_diff import train_diff
+from g_led.data import data_bfs_preprocess
+from g_led.train_test_spatial import train_diff
+from g_led.utils import read_args_txt, save_args
+
 
 class Args:
     def __init__(self):
@@ -38,7 +25,7 @@ class Args:
         for diffusion model
         """
         self.parser.add_argument("--Nt",
-                                 default = 10//4,  # EDIT
+                                 default = 10,
                                  help = 'Time steps we use as a single seq')
         self.parser.add_argument("--unet_dim",
                                  default=32,
@@ -105,8 +92,8 @@ if __name__ == '__main__':
             val=seq_args.start_n + seq_args.n_span,
         ),
         batch_sizes=dict(
-            train=diff_args.batch_size,  # EDIT: reduce batch size for GPU memory; doing this changes how many trajectories are used for validation. Need to update their code to fix this.
-            val=diff_args.batch_size,  # EDIT: reduce batch size for GPU memory; doing this changes how many trajectories are used for validation. Need to update their code to fix this.
+            train=diff_args.batch_size,
+            val=diff_args.batch_size,
         ),
     )
     dl.setup('fit')

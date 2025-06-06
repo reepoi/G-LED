@@ -8,7 +8,7 @@ import numpy as np
 import math
 import torch.nn.functional as F
 from packaging import version
-from spatialModel import MLP as MLPDense
+from g_led.transformer.spatialModel import MLP as MLPDense
 
 class MLP(nn.Module):
 	'''
@@ -37,7 +37,7 @@ class Conv1D(nn.Module):
 		nx (:obj:`int`): The number of input features.
 	Note:
 		When the model is used for forward propagation,
-		the last dimension of the input will be operate  
+		the last dimension of the input will be operate
 	"""
 
 	def __init__(self, nf, nx):
@@ -63,7 +63,7 @@ class Attention(nn.Module):
 	"""
 	def __init__(self, nx, n_ctx, config, scale=False):
 		super().__init__()
-		
+
 		assert nx % config.n_head == 0
 		self.register_buffer(
 			"bias", torch.tril(torch.ones((n_ctx, n_ctx), dtype=torch.uint8)).view(1, 1, n_ctx, n_ctx)
@@ -92,7 +92,7 @@ class Attention(nn.Module):
 
 		w = nn.Softmax(dim=-1)(w)
 		w = self.attn_dropout(w)
-		
+
 		# Mask heads if we want to
 		if head_mask is not None:
 			w = w * head_mask
@@ -101,7 +101,7 @@ class Attention(nn.Module):
 		if output_attentions:
 			outputs.append(w)
 		return outputs # [value, weights]
-	
+
 	def merge_heads(self, x):
 		x = x.permute(0, 2, 1, 3).contiguous()
 		new_x_shape = x.size()[:-2] + (x.size(-2) * x.size(-1),)
@@ -109,23 +109,23 @@ class Attention(nn.Module):
 
 	def split_heads(self, x, k=False):
 		new_x_shape = x.size()[:-1] + (self.n_head, x.size(-1) // self.n_head)
-		
+
 		x = x.view(*new_x_shape)  # in Tensorflow implem: fct split_states
 		if k:
 			return x.permute(0, 2, 3, 1)  # (batch, head, head_features, seq_length)
 		else:
 			return x.permute(0, 2, 1, 3)  # (batch, head, seq_length, head_features)
-		
+
 
 	def forward(self, x, layer_past=None, attention_mask=None, head_mask=None, use_cache=False, output_attentions=False):
 		x = self.c_attn(x) # x -> q, k, v
 		query, key, value = x.split(self.split_size, dim=2) # HanGao: wouldn't it be more general if dim=-1?
-		
+
 		query = self.split_heads(query)
-		
+
 		key = self.split_heads(key, k=True) # k=True for keys which transposes the last two dims
 		value = self.split_heads(value)
-		# Concat previous key and value tensors 
+		# Concat previous key and value tensors
 		if layer_past is not None:
 			past_key, past_value = layer_past[0].transpose(-2, -1), layer_past[1]  # transpose back cf below
 			key = torch.cat((past_key, key), dim=-1)
@@ -135,15 +135,15 @@ class Attention(nn.Module):
 			present = torch.stack((key.transpose(-2, -1), value))  # transpose to have same shapes for stacking
 		else:
 			present = (None,)
-		
+
 		attn_outputs = self._attn(query, key, value, attention_mask, head_mask, output_attentions)
-		
+
 		a = attn_outputs[0]
 		a = self.merge_heads(a)
-		
+
 		a = self.c_proj(a)
 		a = self.resid_dropout(a)
-		
+
 		outputs = [a, present] + attn_outputs[1:]
 		return outputs
 
@@ -189,7 +189,7 @@ class SequentialModel(nn.Module):
 		self.wpe = nn.Embedding(config.n_ctx, config.n_embd)
 		self.init_weights()
 		self.n_embd = config.n_embd
-	
+
 	def init_weights(self):
 		for module in self.modules():
 			if isinstance(module, (nn.Linear, nn.Embedding, Conv1D)):
@@ -207,7 +207,7 @@ class SequentialModel(nn.Module):
 			#print(name, param.numel())
 			count += param.numel()
 		return count
-	
+
 	def forward(self,
 		inputs_embeds=None,
 		past=None,
@@ -226,7 +226,7 @@ class SequentialModel(nn.Module):
 
 		if position_ids is not None:
 			position_ids = position_ids.view(-1, input_shape[-1])
-		
+
 		"""
 		Han Gao: prop_embeds has no use!
 		"""
@@ -242,12 +242,12 @@ class SequentialModel(nn.Module):
 			past = [None] * len(self.h)
 		else:
 			past_length = past[0][0].size(-2)
-			
+
 		if position_ids is None:
 			device = inputs_embeds.device
 			position_ids = torch.arange(past_length, input_shape[-1] + past_length, dtype=torch.float, device=device)
 			position_ids = position_ids.unsqueeze(0).view(-1, input_shape[-1]).repeat(inputs_embeds.size(0),1)
-			
+
 		# Attention mask.
 		if attention_mask is not None:
 			assert batch_size > 0, "batch_size has to be defined and > 0"
@@ -266,7 +266,7 @@ class SequentialModel(nn.Module):
 			# effectively the same as removing these entirely.
 			attention_mask = attention_mask.to(dtype=next(self.parameters()).dtype)  # fp16 compatibility
 			attention_mask = (1.0 - attention_mask) * -10000.0
-			
+
 
 		# Prepare head mask if needed
 		# 1.0 in head_mask indicate we keep the head
@@ -330,7 +330,7 @@ class SequentialModel(nn.Module):
 			attention_output_shape = input_shape[:-1] + (-1,) + all_attentions[0].shape[-2:]
 			all_attentions = tuple(t.view(*attention_output_shape) for t in all_attentions)
 			outputs = outputs + (all_attentions,)
-		# Han Gao: We must figure out what dose the output contain?	
+		# Han Gao: We must figure out what dose the output contain?
 		return outputs # [last_hidden_state, past_key_values, hidden_states, attentions]
 
 

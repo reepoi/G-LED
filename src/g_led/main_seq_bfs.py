@@ -1,25 +1,15 @@
-# General Package
 import argparse
-from pathlib import Path
-import sys
-import pdb
-from datetime import datetime
 import os
-import numpy as np
-import json
+from datetime import datetime
+from pathlib import Path
+
 import torch
-from torch.utils.data import DataLoader
-# Internal package
-sys.path.insert(0, './util')
-from utils import save_args
-sys.path.insert(0, './data')
-from data_bfs_preprocess import bfs_dataset
-import data_bfs_preprocess
-sys.path.insert(0, './transformer')
-from sequentialModel import SequentialModel as transformer
-sys.path.insert(0, './train_test_seq')
-from train_seq import train_seq_shift
-import time
+
+from g_led.data import data_bfs_preprocess
+from g_led.train_test_seq.train_seq import train_seq_shift
+from g_led.transformer.sequentialModel import SequentialModel as transformer
+from g_led.utils import save_args
+
 
 class Args:
     def __init__(self):
@@ -30,7 +20,7 @@ class Args:
         self.parser.add_argument("--dataset",
                                  default='bfs_les',
                                  help='name it')
-        self.parser.add_argument("--data_dir", default='/root/workspace/out/diffusion-dynamics/G-LED/data')
+        self.parser.add_argument("--data_dir", default='/mnta/taosData/diffusion-dynamics/G-LED/data')
         self.parser.add_argument("--data_location",
                                  default = ['/root/workspace/out/diffusion-dynamics/G-LED/data/data0.npy',
                                             '/root/workspace/out/diffusion-dynamics/G-LED/data/data1.npy'],
@@ -143,7 +133,7 @@ class Args:
         args = self.parser.parse_args()
         args.time = '{0:%Y_%m_%d_%H_%M_%S}'.format(datetime.now())
         # output dataset
-        args.dir_output = '/root/workspace/out/diffusion-dynamics/G-LED/runs/output'
+        args.dir_output = '/home/sci/ttransue/out/g_led/runs/original_code'
         args.fname = args.dataset + '_' +args.time
         args.experiment_path = args.dir_output + args.fname
         args.model_save_path = args.experiment_path + '/' + 'model_save/'
@@ -193,7 +183,7 @@ if __name__ == '__main__':
         ),
         batch_sizes=dict(
             train=args.batch_size,
-            val=args.batch_size_valid//4,  # EDIT: reduce batch size for GPU memory; doing this changes how many trajectories are used for validation. Need to update their code to fix this.
+            val=args.batch_size_valid,
         ),
     )
     dl.setup('fit')
@@ -227,7 +217,7 @@ if __name__ == '__main__':
     """
     create model
     """
-    model = transformer(args).to(args.device).float()
+    model = transformer(args).float().to(args.device)
     print('Number of parameters: {}'.format(model._num_parameters()))
 
     """

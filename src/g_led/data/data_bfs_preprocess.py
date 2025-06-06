@@ -1,13 +1,16 @@
 from pathlib import Path
-import numpy as np
-import pdb
-from torch.utils.data import Dataset, DataLoader
-import torch
-import matplotlib.pyplot as plt
-import os
-from tqdm import tqdm
+import pprint
+
 import lightning.pytorch as pl
+import numpy as np
+import torch
 from pytorch_lightning.utilities import CombinedLoader
+from torch.utils.data import DataLoader, Dataset
+import hydra
+from omegaconf import OmegaConf
+
+from conf import conf
+from g_led import utils
 
 
 class BackwardFacingStep(pl.lightning.LightningDataModule):
@@ -30,50 +33,30 @@ class BackwardFacingStep(pl.lightning.LightningDataModule):
         solution = torch.from_numpy(solution)
         torch.save(solution, self.data_dir/'data_cat.pt')
 
+    def extract_split_from_solution(self, solution, times_split, len_split=None):
+        len_split = len_split or times_split
+        return (
+            solution[self.solution_start_times[times_split]:self.solution_end_times[times_split]]
+            .unfold(0, self.trajectory_max_lens[len_split], 1)
+            .permute(0, 4, 1, 2, 3)
+        )
+
     def setup(self, stage):
         if stage == 'fit':
             solution = torch.load(self.data_dir/'data_cat.pt')
-            self.train = (
-                solution[self.solution_start_times['train']:self.solution_end_times['train']]
-                .unfold(0, self.trajectory_max_lens['train'], 1)
-                .permute(0, 4, 1, 2, 3)
-            )
-            self.val_on_train = (
-                solution[self.solution_start_times['train']:self.solution_end_times['train']]
-                .unfold(0, self.trajectory_max_lens['val'], 1)
-                .permute(0, 4, 1, 2, 3)
-            )
-            self.val = (
-                solution[self.solution_start_times['val']:self.solution_end_times['val']]
-                .unfold(0, self.trajectory_max_lens['val'], 1)
-                .permute(0, 4, 1, 2, 3)
-            )
+            self.train = self.extract_split_from_solution(solution, 'train')
+            self.val_on_train = self.extract_split_from_solution(solution, 'train', 'val')
+            self.val = self.extract_split_from_solution(solution, 'val')
         elif stage == 'validate':
             solution = torch.load(self.data_dir/'data_cat.pt')
-            self.val_on_train = (
-                solution[self.solution_start_times['train']:self.solution_end_times['train']]
-                .unfold(0, self.trajectory_max_lens['val'], 1)
-                .permute(0, 4, 1, 2, 3)
-            )
-            self.val = (
-                solution[self.solution_start_times['val']:self.solution_end_times['val']]
-                .unfold(0, self.trajectory_max_lens['val'], 1)
-                .permute(0, 4, 1, 2, 3)
-            )
+            self.val_on_train = self.extract_split_from_solution(solution, 'train', 'val')
+            self.val = self.extract_split_from_solution(solution, 'val')
         elif stage == 'test':
             raise NotImplementedError()
         elif stage == 'predict':
             solution = torch.load(self.data_dir/'data_cat.pt')
-            self.val_on_train = (
-                solution[self.solution_start_times['train']:self.solution_end_times['train']]
-                .unfold(0, self.trajectory_max_lens['val'], 1)
-                .permute(0, 4, 1, 2, 3)
-            )
-            self.val = (
-                solution[self.solution_start_times['val']:self.solution_end_times['val']]
-                .unfold(0, self.trajectory_max_lens['val'], 1)
-                .permute(0, 4, 1, 2, 3)
-            )
+            self.val_on_train = self.extract_split_from_solution(solution, 'train', 'val')
+            self.val = self.extract_split_from_solution(solution, 'val')
         else:
             raise ValueError(f'Unknown stage: {stage}')
 
@@ -96,12 +79,11 @@ class BackwardFacingStep(pl.lightning.LightningDataModule):
 
 
 class bfs_dataset(Dataset):
-    def __init__(self,
-                 data_location=['/root/workspace/out/diffusion-dynamics/G-LED/data/data0.npy',
-                                '/root/workspace/out/diffusion-dynamics/G-LED/data/data1.npy'],
+    def __init__(self, data_dir,
                  trajec_max_len=50,
                  start_n=0,
                  n_span=510):
+        self.data_dir = data_dir
         assert n_span > trajec_max_len
         self.start_n = start_n
         self.n_span  = n_span
@@ -116,7 +98,10 @@ class bfs_dataset(Dataset):
         #                             solution1],axis = 0)
         # print('convert to torch')
         # self.solution = torch.from_numpy(solution[start_n:start_n+n_span])
-        solution = torch.load('/root/workspace/out/diffusion-dynamics/G-LED/data/data_cat.pt')
+        assert (self.data_dir/'data0.npy').exists()
+        assert (self.data_dir/'data1.npy').exists()
+        assert (self.data_dir/'data_cat.pt').exists()
+        solution = torch.load(self.data_dir/'data_cat.pt')
         self.solution = solution[start_n:start_n+n_span]
 
     def __len__(self):
@@ -127,20 +112,15 @@ class bfs_dataset(Dataset):
         return item
 
 
+@hydra.main(**{**utils.HYDRA_INIT, 'config_path': '../../../conf'})
+def main(cfg):
+    engine = conf.get_engine()
+    conf.orm.create_all(engine)
+    with conf.sa.orm.Session(engine) as db:
+        cfg = conf.orm.instantiate_and_insert_config(db, OmegaConf.to_container(cfg, resolve=True))
+        pprint.pp(cfg)
+        print('end')
+
+
 if __name__ == '__main__':
-    dl = BackwardFacingStep(
-        Path('/root/workspace/out/diffusion-dynamics/G-LED/data'),
-        trajectory_max_lens=dict(train=50, val=50),
-        solution_start_times=dict(train=0, val=0),
-        solution_end_times=dict(train=510, val=510),
-        batch_sizes=dict(train=20, val=20)
-    )
-    dl.prepare_data()
-    dl.setup('validate')
-    dset = bfs_dataset()
-    dloader = DataLoader(dataset=dset, batch_size=20, shuffle=False)
-    for i, (batch_original, batch) in enumerate(zip(dloader, dl.val_dataloader(shuffle=False))):
-        print(i)
-        if not (batch_original == batch[0]['val']).all():
-            breakpoint()
-            print('Do something!')
+    main()

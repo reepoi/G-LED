@@ -1,11 +1,11 @@
-from tqdm import tqdm
-import torch
-import pdb
-import sys
 import os
+
 import numpy as np
-sys.path.insert(0, './util')
-from utils import save_loss
+import torch
+from tqdm import tqdm
+
+from g_led.utils import save_loss
+
 
 def train_diff(diff_args,
                seq_args,
@@ -37,7 +37,7 @@ def train_epoch(diff_args,seq_args, trainer, data_loader,down_sampler,up_sampler
     loss_epoch = []
     print('Iteration is ', len(data_loader))
     for iteration, batch in tqdm(enumerate(data_loader)):
-        batch = batch.to(diff_args.device).float()
+        batch = batch.float().to(diff_args.device)
         bsize = batch.shape[0]
         ntime = batch.shape[1]
         batch_coarse      = down_sampler(batch.reshape([bsize*ntime,2,512,512]))
