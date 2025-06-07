@@ -2,13 +2,18 @@ import argparse
 import os
 from datetime import datetime
 from pathlib import Path
+import pprint
 
+import hydra
+from omegaconf import OmegaConf
 import torch
 
+from conf import conf
 from g_led.data import data_bfs_preprocess
 from g_led.train_test_seq.train_seq import train_seq_shift
 from g_led.transformer.sequentialModel import SequentialModel as transformer
 from g_led.utils import save_args
+from g_led import utils
 
 
 class Args:
@@ -153,71 +158,27 @@ class Args:
 
 
 
-if __name__ == '__main__':
-    args = Args()
-    args = args.update_args()
-    save_args(args)
-    """
-    pre-check
-    """
-    assert args.coarse_dim[0]*args.coarse_dim[1]*2 == args.n_embd
-    #assert args.trajec_max_len_valid == args.n_ctx + 1
+@hydra.main(**utils.HYDRA_INIT)
+def main(cfg):
+    engine = conf.get_engine()
+    conf.orm.create_all(engine)
+    with conf.sa.orm.Session(engine) as db:
+        cfg = conf.orm.instantiate_and_insert_config(db, OmegaConf.to_container(cfg, resolve=True))
+        pprint.pp(cfg)
 
-    """
-    fetch data
-    """
-    print('Start data_set')
-    dl = data_bfs_preprocess.BackwardFacingStep(
-        Path(args.data_dir),
-        trajectory_max_lens=dict(
-            train=args.trajec_max_len,
-            val=args.trajec_max_len_valid,
-        ),
-        solution_start_times=dict(
-            train=args.start_n,
-            val=args.start_n_valid,
-        ),
-        solution_end_times=dict(
-            train=args.start_n + args.n_span,
-            val=args.start_n_valid + args.n_span_valid,
-        ),
-        batch_sizes=dict(
-            train=args.batch_size,
-            val=args.batch_size_valid,
-        ),
-    )
-    dl.setup('fit')
-    data_loader_train = dl.train_dataloader()
-    dl_val = dl.val_dataloader(combined=False)
+    # assert args.coarse_dim[0]*args.coarse_dim[1]*2 == args.n_embd
+    # assert args.trajec_max_len_valid == args.n_ctx + 1
+
+    dataset = data_bfs_preprocess.get_dataset(cfg.dataset)
+    dataset.setup('fit')
+    data_loader_train = dataset.train_dataloader()
+    dl_val = dataset.val_dataloader(combined=False)
     data_loader_test_on_train = dl_val['val_on_train']
     data_loader_valid = dl_val['val']
-    # tic = time.time()
-    # data_set_train = bfs_dataset(data_location  = args.data_location,
-    #                              trajec_max_len = args.trajec_max_len,
-    #                              start_n        = args.start_n,
-    #                              n_span         = args.n_span)
-    # data_set_test_on_train = bfs_dataset(data_location  = args.data_location,
-    #                                      trajec_max_len = args.trajec_max_len_valid,
-    #                                      start_n        = args.start_n,
-    #                                      n_span         = args.n_span)
-    # data_set_valid = bfs_dataset(data_location  = args.data_location,
-    #                              trajec_max_len = args.trajec_max_len_valid,
-    #                              start_n        = args.start_n_valid,
-    #                              n_span         = args.n_span_valid)
-    # data_loader_train = DataLoader(dataset    = data_set_train,
-    #                                shuffle    = args.shuffle,
-    #                                batch_size = args.batch_size)
-    # data_loader_test_on_train = DataLoader(dataset    = data_set_test_on_train,
-    #                                        shuffle    = args.shuffle,
-    #                                        batch_size = args.batch_size_valid)
-    # data_loader_valid = DataLoader(dataset    = data_set_valid,
-    #                                shuffle    = args.shuffle,
-    #                                batch_size = args.batch_size_valid)
-    # print('Done data-set use time ', time.time() - tic)
     """
     create model
     """
-    model = transformer(args).float().to(args.device)
+    model = transformer(cfg.model, 2 * cfg.dataset.embedding_dimension).float().to(cfg.device)
     print('Number of parameters: {}'.format(model._num_parameters()))
 
     """
@@ -228,22 +189,25 @@ if __name__ == '__main__':
     """
     create optimizer
     """
-    optimizer = torch.optim.Adam(model.parameters(),
-                                lr=args.learning_rate)
+    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.model.learning_rate)
     """
     create scheduler
     """
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
-                                                step_size=1,
-                                                gamma=args.gamma)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=cfg.model.learning_rate_decay)
     """
     train
     """
-    train_seq_shift(args=args,
+    train_seq_shift(cfg=cfg,
                     model=model,
                     data_loader=data_loader_train,
-                    data_loader_copy = data_loader_test_on_train,
-                    data_loader_valid = data_loader_valid,
+                    data_loader_copy=data_loader_test_on_train,
+                    data_loader_valid=data_loader_valid,
                     loss_func=loss_func,
                     optimizer=optimizer,
                     scheduler=scheduler)
+
+
+if __name__ == '__main__':
+    last_override, run_dir = utils.get_run_dir()
+    utils.set_run_dir(last_override, run_dir)
+    main()

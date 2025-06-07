@@ -9,7 +9,7 @@ import matplotlib
 """
 Start training test
 """
-def test_epoch(args,
+def test_epoch(cfg,
                model,
                data_loader,
                loss_func,
@@ -18,7 +18,7 @@ def test_epoch(args,
                ite_thold = None):
     with torch.no_grad():
         #IDHistory = [0] + [i for i in range(2, args.n_ctx)]
-        IDHistory = [i for i in range(1, args.n_ctx)]
+        IDHistory = [i for i in range(1, cfg.model.time_step_window_size)]
         REs = []
         print("Total ite", len(data_loader))
         for iteration, batch in tqdm(enumerate(data_loader)):
@@ -28,19 +28,18 @@ def test_epoch(args,
                 if iteration>ite_thold:
                     break
             # batch = batch.to(args.device).float()
-            batch = batch.float().to(args.device)
+            batch = batch.to(cfg.device)
             b_size = batch.shape[0]
             num_time = batch.shape[1]
             num_velocity = 2
-            batch = batch.reshape([b_size*num_time, num_velocity, 512, 512])
+            batch = batch.reshape([b_size*num_time, num_velocity, *cfg.dataset.dimensions()])
             batch_coarse = down_sampler(batch).reshape([b_size,
                                                         num_time,
                                                         num_velocity,
-                                                        args.coarse_dim[0],
-                                                        args.coarse_dim[1]])
+                                                        *cfg.dataset.coarse_dimensions()])
             batch_coarse_flatten = batch_coarse.reshape([b_size,
                                                          num_time,
-                                                         num_velocity * args.coarse_dim[0] * args.coarse_dim[1]])
+                                                         num_velocity * cfg.dataset.embedding_dimension])
 
             past = None
             xn = batch_coarse_flatten[:,0:1,:]
@@ -49,10 +48,10 @@ def test_epoch(args,
             for j in (range(Nt)):
                 if j == 0:
                     xnp1,past,_,_=model(inputs_embeds = xn, past=past)
-                elif past[0][0].shape[2] < args.n_ctx and j > 0:
+                elif past[0][0].shape[2] < cfg.model.time_step_window_size and j > 0:
                     xnp1,past,_,_=model(inputs_embeds = xn, past=past)
                 else:
-                    past = [[past[l][0][:,:,IDHistory,:], past[l][1][:,:,IDHistory,:]] for l in range(args.n_layer)]
+                    past = [[past[l][0][:,:,IDHistory,:], past[l][1][:,:,IDHistory,:]] for l in range(cfg.model.attention_layer_count)]
                     xnp1,past,_,_=model(inputs_embeds = xn, past=past)
                 xn = xnp1
                 mem.append(xn)
@@ -91,7 +90,7 @@ def test_plot_eval(args,
         REs = []
         print("Total ite", len(data_loader))
         for iteration, batch in tqdm(enumerate(data_loader)):
-            batch = batch.float().to(args.device)
+            batch = batch.to(args.device)
             b_size = batch.shape[0]
             num_time = batch.shape[1]
             num_velocity = 2
@@ -207,7 +206,7 @@ def eval_seq_overall(args_train,
     Nt = args_sample.test_Nt
     tic = time.time()
     print('Start test forwarding with Step number of ', Nt)
-    max_mre,min_mre, mean_mre, sigma3 = test_epoch(args=args_train,
+    max_mre,min_mre, mean_mre, sigma3 = test_epoch(cfg=args_train,
                                                    model=model,
                                                    data_loader=data_loader,
                                                    loss_func=loss_func,

@@ -37,7 +37,7 @@ def train_epoch(diff_args,seq_args, trainer, data_loader,down_sampler,up_sampler
     loss_epoch = []
     print('Iteration is ', len(data_loader))
     for iteration, batch in tqdm(enumerate(data_loader)):
-        batch = batch.float().to(diff_args.device)
+        batch = batch.to(diff_args.device)
         bsize = batch.shape[0]
         ntime = batch.shape[1]
         batch_coarse      = down_sampler(batch.reshape([bsize*ntime,2,512,512]))

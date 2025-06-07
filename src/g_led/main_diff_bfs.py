@@ -77,7 +77,7 @@ if __name__ == '__main__':
     """
     Fetch dataset
     """
-    dl = data_bfs_preprocess.BackwardFacingStep(
+    dl = data_bfs_preprocess.BackwardFacingStep2D(
         Path(seq_args.data_dir),
         trajectory_max_lens=dict(
             train=diff_args.Nt,

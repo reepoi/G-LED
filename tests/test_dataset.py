@@ -12,8 +12,8 @@ def test_backward_facing_step_old_and_new_datasets_equal(engine):
     conf.orm.create_all(engine)
     with conf.sa.orm.Session(engine) as db:
         cfg = conf.orm.instantiate_and_insert_config(db, cfg)
-        dl = data_bfs_preprocess.BackwardFacingStep(
-            cfg.data_dir,
+        dl = data_bfs_preprocess.BackwardFacingStep2D(
+            cfg.dataset.data_dir,
             trajectory_max_lens=dict(train=50, val=50),
             solution_start_times=dict(train=0, val=0),
             solution_end_times=dict(train=510, val=510),
@@ -21,7 +21,7 @@ def test_backward_facing_step_old_and_new_datasets_equal(engine):
         )
         dl.prepare_data()
         dl.setup('validate')
-        dset = data_bfs_preprocess.bfs_dataset(cfg.data_dir)
+        dset = data_bfs_preprocess.bfs_dataset(cfg.dataset.data_dir)
         dloader = DataLoader(dataset=dset, batch_size=20, shuffle=False)
         for i, (batch_original, batch) in enumerate(zip(dloader, dl.val_dataloader(shuffle=False))):
             print(i)

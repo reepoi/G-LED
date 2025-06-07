@@ -1,27 +1,24 @@
+import math
+
 import torch
 import torch.nn as nn
-import pdb
-from dataclasses import dataclass
-import torch.nn.functional as F
-import time
-import numpy as np
-import math
 import torch.nn.functional as F
 from packaging import version
+
 from g_led.transformer.spatialModel import MLP as MLPDense
+
 
 class MLP(nn.Module):
     '''
     Word specific FCNN implementation from:
     https://github.com/huggingface/transformers/blob/master/src/transformers/modeling_gpt2.py
     '''
-    def __init__(self, n_state, config):  # in MLP: n_state=3072 (4 * n_embd)
+    def __init__(self, cfg, embedding_dimension, n_state):  # in MLP: n_state=3072 (4 * n_embd)
         super().__init__()
-        nx = config.n_embd
-        self.c_fc = Conv1D(n_state, nx)
-        self.c_proj = Conv1D(nx, n_state)
-        self.act = ACT2FN[config.activation_function]
-        self.dropout = nn.Dropout(config.resid_pdrop)
+        self.c_fc = Conv1D(n_state, embedding_dimension)
+        self.c_proj = Conv1D(embedding_dimension, n_state)
+        self.act = ACT2FN['relu']
+        self.dropout = nn.Dropout(cfg.resid_pdrop)
 
     def forward(self, x):
         h = self.act(self.c_fc(x))
@@ -57,26 +54,26 @@ class Conv1D(nn.Module):
 class Attention(nn.Module):
     """
     Args:
-        nx (:obj:`int`): The number of embedding feature, e.g., 128, 256, 512 or so
-        n_ctx (:obj:`int`): The context length (not sure)
+        embedding_dimension (:obj:`int`): The number of embedding feature, e.g., 128, 256, 512 or so
+        time_step_window_size (:obj:`int`): The context length (not sure)
         config (:obj:T.B.D):
     """
-    def __init__(self, nx, n_ctx, config, scale=False):
+    def __init__(self, cfg, embedding_dimension, time_step_window_size, scale=False):
         super().__init__()
 
-        assert nx % config.n_head == 0
+        assert embedding_dimension % cfg.attention_head_count == 0
         self.register_buffer(
-            "bias", torch.tril(torch.ones((n_ctx, n_ctx), dtype=torch.uint8)).view(1, 1, n_ctx, n_ctx)
+            "bias", torch.tril(torch.ones((time_step_window_size, time_step_window_size), dtype=torch.uint8)).view(1, 1, time_step_window_size, time_step_window_size)
         )
         self.register_buffer("masked_bias", torch.tensor(-1e4))
-        self.n_head = config.n_head
-        self.split_size = nx
+        self.n_head = cfg.attention_head_count
+        self.split_size = embedding_dimension
         self.scale = scale
 
-        self.c_attn = Conv1D(nx * 3, nx) # Kindly reminder: input_size = [..., nx] and output_size = [..., 3 * nx]
-        self.c_proj = Conv1D(nx, nx) # Question: what is the use of this self.c_proj?
-        self.attn_dropout = nn.Dropout(config.attn_pdrop)
-        self.resid_dropout = nn.Dropout(config.resid_pdrop)
+        self.c_attn = Conv1D(embedding_dimension * 3, embedding_dimension) # Kindly reminder: input_size = [..., embedding_dimension] and output_size = [..., 3 * embedding_dimension]
+        self.c_proj = Conv1D(embedding_dimension, embedding_dimension) # Question: what is the use of this self.c_proj?
+        self.attn_dropout = nn.Dropout(cfg.attn_pdrop)
+        self.resid_dropout = nn.Dropout(cfg.resid_pdrop)
 
     def _attn(self, q, k, v, attention_mask=None, head_mask=None, output_attentions=False):
         w = torch.matmul(q, k)
@@ -148,13 +145,12 @@ class Attention(nn.Module):
         return outputs
 
 class Block(nn.Module):
-    def __init__(self, n_ctx, config, scale=False):
+    def __init__(self, cfg, embedding_dimension, time_step_window_size, scale=False):
         super().__init__()
-        nx = config.n_embd
-        self.ln_1 = nn.LayerNorm(nx, eps=config.layer_norm_epsilon)
-        self.attn = Attention(nx, n_ctx, config, scale)
-        self.ln_2 = nn.LayerNorm(nx, eps=config.layer_norm_epsilon)
-        self.mlp = MLP(4 * nx, config)
+        self.ln_1 = nn.LayerNorm(embedding_dimension, eps=cfg.layer_norm_epsilon)
+        self.attn = Attention(cfg, embedding_dimension, time_step_window_size, scale)
+        self.ln_2 = nn.LayerNorm(embedding_dimension, eps=cfg.layer_norm_epsilon)
+        self.mlp = MLP(cfg, embedding_dimension, 4 * embedding_dimension)
 
     def forward(self, x, layer_past=None, attention_mask=None, head_mask=None, use_cache=False, output_attentions=False):
         # Evaluate attention heads
@@ -178,24 +174,24 @@ class Block(nn.Module):
         return outputs  # x, present, (attentions)
 
 class SequentialModel(nn.Module):
-    def __init__(self, config):  # in MLP: n_state=3072 (4 * n_embd)
+    def __init__(self, cfg, embedding_dimension):  # in MLP: n_state=3072 (4 * n_embd)
         super().__init__()
-        self.config = config
-        self.output_hidden_states = config.output_hidden_states
-        self.drop = nn.Dropout(config.embd_pdrop)
-        self.h = nn.ModuleList([Block(config.n_ctx, config, scale=True) for _ in range(config.n_layer)])
-        self.ln_f = nn.LayerNorm(config.n_embd, eps=config.layer_norm_epsilon)
-        self.mlp_f = nn.Linear(config.n_embd, config.n_embd)
-        self.wpe = nn.Embedding(config.n_ctx, config.n_embd)
+        self.cfg = cfg
+        self.embedding_dimension = embedding_dimension
+        self.output_hidden_states = cfg.output_hidden_states
+        self.drop = nn.Dropout(cfg.embd_pdrop)
+        self.h = nn.ModuleList([Block(cfg, embedding_dimension, cfg.time_step_window_size, scale=True) for _ in range(cfg.attention_layer_count)])
+        self.ln_f = nn.LayerNorm(embedding_dimension, eps=cfg.layer_norm_epsilon)
+        self.mlp_f = nn.Linear(embedding_dimension, embedding_dimension)
+        self.wpe = nn.Embedding(cfg.time_step_window_size, embedding_dimension)
         self.init_weights()
-        self.n_embd = config.n_embd
 
     def init_weights(self):
         for module in self.modules():
             if isinstance(module, (nn.Linear, nn.Embedding, Conv1D)):
             # Slightly different from the TF version which uses truncated_normal for initialization
             # cf https://github.com/pytorch/pytorch/pull/5617
-                module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+                module.weight.data.normal_(mean=0.0, std=self.cfg.weight_init_std)
                 if isinstance(module, (nn.Linear, Conv1D)) and module.bias is not None:
                     module.bias.data.zero_()
             elif isinstance(module, nn.LayerNorm):
@@ -218,7 +214,7 @@ class SequentialModel(nn.Module):
         use_cache=True,
         output_attentions=None):
 
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_attentions = output_attentions if output_attentions is not None else self.cfg.output_attentions
 
         # Input embeddings
         input_shape = inputs_embeds.size()[:-1]
@@ -280,10 +276,10 @@ class SequentialModel(nn.Module):
         # Function embeddings
         # http://papers.nips.cc/paper/7181-attention-is-all-you-need
         position_embeds = torch.zeros_like(inputs_embeds)
-        i = torch.arange(0, self.config.n_embd // 2, dtype=torch.float, device=inputs_embeds.device).unsqueeze(0).unsqueeze(0)
-        position_embeds[:, :, ::2] = torch.sin(position_ids.unsqueeze(-1) / 10000 ** (2 * i.type(torch.FloatTensor).to(inputs_embeds.device) / self.config.n_embd))
-        i = i[:, :, self.config.n_embd % 2]
-        position_embeds[:, :, 1::2] = torch.cos(position_ids.unsqueeze(-1) / 10000 ** (2 * i.type(torch.FloatTensor).to(inputs_embeds.device) / self.config.n_embd))
+        i = torch.arange(0, self.embedding_dimension // 2, dtype=torch.float, device=inputs_embeds.device).unsqueeze(0).unsqueeze(0)
+        position_embeds[:, :, ::2] = torch.sin(position_ids.unsqueeze(-1) / 10000 ** (2 * i.type(torch.FloatTensor).to(inputs_embeds.device) / self.embedding_dimension))
+        i = i[:, :, self.embedding_dimension % 2]
+        position_embeds[:, :, 1::2] = torch.cos(position_ids.unsqueeze(-1) / 10000 ** (2 * i.type(torch.FloatTensor).to(inputs_embeds.device) / self.embedding_dimension))
         hidden_states = inputs_embeds + position_embeds
         # hidden_states = inputs_embeds + position_embeds
         hidden_states = self.drop(hidden_states)

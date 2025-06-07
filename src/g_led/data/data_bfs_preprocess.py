@@ -10,72 +10,91 @@ import hydra
 from omegaconf import OmegaConf
 
 from conf import conf
+import conf.dataset
 from g_led import utils
 
 
-class BackwardFacingStep(pl.lightning.LightningDataModule):
-    def __init__(self, data_dir, trajectory_max_lens, solution_start_times, solution_end_times, batch_sizes):
-        self.data_dir = data_dir
-        self.trajectory_max_lens = trajectory_max_lens
-        self.solution_start_times = solution_start_times
-        self.solution_end_times = solution_end_times
-        self.batch_sizes = batch_sizes
+class BackwardFacingStep2D(pl.lightning.LightningDataModule):
+    def __init__(self, cfg):
+        self.cfg = cfg
 
     def prepare_data(self):
-        assert (self.data_dir/'data0.npy').exists()
-        assert (self.data_dir/'data1.npy').exists()
-        if (self.data_dir/'data_cat.pt').exists():
+        assert (self.cfg.data_dir/'data0.npy').exists()
+        assert (self.cfg.data_dir/'data1.npy').exists()
+        if (self.cfg.data_dir/'data_cat_f32.pt').exists():
             return
 
-        solution0 = np.load(self.data_dir/'data0.npy', allow_pickle=True)
-        solution1 = np.load(self.data_dir/'data1.npy', allow_pickle=True)
+        solution0 = np.load(self.cfg.data_dir/'data0.npy', allow_pickle=True)
+        solution1 = np.load(self.cfg.data_dir/'data1.npy', allow_pickle=True)
         solution  = np.concatenate((solution0, solution1), axis=0)
         solution = torch.from_numpy(solution)
-        torch.save(solution, self.data_dir/'data_cat.pt')
+        torch.save(solution.to(torch.float32), self.cfg.data_dir/'data_cat_f32.pt')
 
-    def extract_split_from_solution(self, solution, times_split, len_split=None):
-        len_split = len_split or times_split
+    def extract_from_solution(self, solution, start, end, trajectory_time_step_count):
         return (
-            solution[self.solution_start_times[times_split]:self.solution_end_times[times_split]]
-            .unfold(0, self.trajectory_max_lens[len_split], 1)
+            solution[start:end]
+            .unfold(0, trajectory_time_step_count, 1)
             .permute(0, 4, 1, 2, 3)
         )
 
+    def get_train_split(self, solution, trajectory_time_step_count=None):
+        if trajectory_time_step_count is None:
+            trajectory_time_step_count = self.cfg.trajectory_time_step_count_train
+        return self.extract_from_solution(solution, 0, self.cfg.time_step_count_train, trajectory_time_step_count)
+
+    def get_val_split(self, solution):
+        return self.extract_from_solution(
+            solution,
+            self.cfg.time_step_count_train, self.cfg.time_step_count_train + self.cfg.time_step_count_val,
+            self.cfg.trajectory_time_step_count_val
+        )
+
+    def get_test_split(self, solution):
+        return self.extract_from_solution(
+            solution,
+            self.cfg.time_step_count_train + self.cfg.time_step_count_val,
+            self.cfg.time_step_count_train + self.cfg.time_step_count_val + self.cfg.time_step_count_test,
+            self.cfg.trajectory_time_step_count_test
+        )
+
     def setup(self, stage):
+        solution = torch.load(self.cfg.data_dir/'data_cat_f32.pt')
         if stage == 'fit':
-            solution = torch.load(self.data_dir/'data_cat.pt')
-            self.train = self.extract_split_from_solution(solution, 'train')
-            self.val_on_train = self.extract_split_from_solution(solution, 'train', 'val')
-            self.val = self.extract_split_from_solution(solution, 'val')
+            self.train = self.get_train_split(solution)
+            self.val_on_train = self.get_train_split(solution, self.cfg.trajectory_time_step_count_val)
+            self.val = self.get_val_split(solution)
         elif stage == 'validate':
-            solution = torch.load(self.data_dir/'data_cat.pt')
-            self.val_on_train = self.extract_split_from_solution(solution, 'train', 'val')
-            self.val = self.extract_split_from_solution(solution, 'val')
+            self.val_on_train = self.get_train_split(solution, self.cfg.trajectory_time_step_count_val)
+            self.val = self.get_val_split(solution)
         elif stage == 'test':
-            raise NotImplementedError()
+            self.test = self.get_test_split(solution)
         elif stage == 'predict':
-            solution = torch.load(self.data_dir/'data_cat.pt')
-            self.val_on_train = self.extract_split_from_solution(solution, 'train', 'val')
-            self.val = self.extract_split_from_solution(solution, 'val')
+            self.val_on_train = self.get_train_split(solution, self.cfg.trajectory_time_step_count_val)
+            self.val = self.get_val_split(solution)
+            self.test = self.get_test_split(solution)
         else:
             raise ValueError(f'Unknown stage: {stage}')
 
-    def train_dataloader(self):
-        return DataLoader(self.train, shuffle=True, batch_size=self.batch_sizes['train'])
+    def train_dataloader(self, shuffle=True):
+        return DataLoader(self.train, shuffle=shuffle, batch_size=self.cfg.batch_size_train)
 
-    def val_dataloader(self, shuffle=True, combined=True):
-        val_on_train = DataLoader(self.val_on_train, shuffle=shuffle, batch_size=self.batch_sizes['val'])
-        val = DataLoader(self.val, shuffle=shuffle, batch_size=self.batch_sizes['val'])
+    def val_dataloader(self, shuffle=False, combined=True):
+        val_on_train = DataLoader(self.val_on_train, shuffle=shuffle, batch_size=self.cfg.batch_size_val)
+        val = DataLoader(self.val, shuffle=shuffle, batch_size=self.cfg.batch_size_val)
+        dataloaders = dict(val_on_train=val_on_train, val=val)
         if combined:
-            return CombinedLoader(dict(val_on_train=val_on_train, val=val), mode='max_size')
-        else:
-            return dict(val_on_train=val_on_train, val=val)
+            return CombinedLoader(dataloaders, mode='max_size')
+        return dataloaders
 
-    def test_dataloader(self):
-        raise NotImplementedError()
+    def test_dataloader(self, shuffle=False):
+        return DataLoader(self.test, shuffle=shuffle, batch_size=self.cfg.batch_size_test)
 
-    def predict_dataloader(self):
-        return DataLoader(self.predict, shuffle=True, batch_size=self.batch_sizes['predict'])
+    def predict_dataloader(self, shuffle=True, combined=True):
+        dataloaders = self.val_dataloader(shuffle=shuffle, combined=False)
+        dataloaders['test'] = self.test_dataloader(shuffle=shuffle)
+        if combined:
+            return CombinedLoader(dataloaders, mode='max_size')
+        return dataloaders
 
 
 class bfs_dataset(Dataset):
@@ -100,8 +119,8 @@ class bfs_dataset(Dataset):
         # self.solution = torch.from_numpy(solution[start_n:start_n+n_span])
         assert (self.data_dir/'data0.npy').exists()
         assert (self.data_dir/'data1.npy').exists()
-        assert (self.data_dir/'data_cat.pt').exists()
-        solution = torch.load(self.data_dir/'data_cat.pt')
+        assert (self.data_dir/'data_cat_f32.pt').exists()
+        solution = torch.load(self.data_dir/'data_cat_f32.pt')
         self.solution = solution[start_n:start_n+n_span]
 
     def __len__(self):
@@ -110,6 +129,17 @@ class bfs_dataset(Dataset):
     def __getitem__(self, index):
         item = self.solution[index:index+self.trajec_max_len]
         return item
+
+
+def get_dataset(cfg):
+    if isinstance(cfg, conf.dataset.KuramotoSivashinsky1D):
+        raise NotImplementedError()
+    elif isinstance(cfg, conf.dataset.BackwardFacingStep2D):
+        return BackwardFacingStep2D(cfg)
+    elif isinstance(cfg, conf.dataset.ChannelFlow3D):
+        raise NotImplementedError()
+    else:
+        raise ValueError(f'Unknown dataset: {cfg}')
 
 
 @hydra.main(**{**utils.HYDRA_INIT, 'config_path': '../../../conf'})

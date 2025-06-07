@@ -8,6 +8,7 @@ import sqlalchemy as sa
 from hydra_orm import orm
 
 import conf.dataset
+import conf.model
 from g_led import utils
 
 
@@ -18,12 +19,11 @@ def get_engine(dir=str(utils.DIR_ROOT), name='runs'):
 class Conf(orm.Table):
     defaults: List[Any] = hydra_orm.utils.make_defaults_list([
         dict(dataset=omegaconf.MISSING),
-        # dict(model=omegaconf.MISSING),
+        dict(model=omegaconf.MISSING),
         '_self_',
     ])
     root_dir: str = field(default=str(utils.DIR_ROOT.resolve()))
     out_dir: str = field(default=str((utils.DIR_ROOT/'..'/'..'/'out'/'g_led').resolve()))
-    _data_dir: str = field(default=str(Path('/mnta/taosData/diffusion-dynamics/G-LED/data').resolve()))
     run_subdir: str = field(default='runs')
     prediction_filename: str = field(default='output')
     device: str = field(default='cuda')
@@ -33,15 +33,11 @@ class Conf(orm.Table):
     fit: bool = orm.make_field(orm.ColumnRequired(sa.Boolean), default=True)
 
     dataset = orm.OneToManyField(conf.dataset.Dataset, required=True, default=omegaconf.MISSING)
-    # model = orm.OneToManyField(models.Model, required=True, default=omegaconf.MISSING)
+    model = orm.OneToManyField(conf.model.Model, required=True, default=omegaconf.MISSING)
 
     @property
     def run_dir(self):
         return Path(self.out_dir)/self.run_subdir/self.alt_id
-
-    @property
-    def data_dir(self):
-        return Path(self._data_dir)
 
 
 sa.event.listens_for(Conf, 'before_insert')(
@@ -50,4 +46,5 @@ sa.event.listens_for(Conf, 'before_insert')(
 
 
 orm.store_config(Conf)
-orm.store_config(conf.dataset.Dataset, group=Conf.dataset.key)
+orm.store_config(conf.dataset.BackwardFacingStep2D, group=Conf.dataset.key, name=f'_{conf.dataset.BackwardFacingStep2D.__name__}')
+orm.store_config(conf.model.Transformer, group=Conf.model.key, name=f'_{conf.model.Transformer.__name__}')

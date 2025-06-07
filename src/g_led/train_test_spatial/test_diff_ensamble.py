@@ -59,7 +59,7 @@ def test_final_ensamble(args_final,
             REs_fine = []
             print('total ite', len(data_loader))
             for iteration, batch in tqdm(enumerate(data_loader)):
-                batch = batch.float().to(args_final.device)
+                batch = batch.to(args_final.device)
                 b_size = batch.shape[0]
                 assert b_size == 1
                 num_time = batch.shape[1]
