@@ -45,8 +45,8 @@ def train_seq_shift(cfg,
             print('#### mean re train####=',mean_mre)
             print('#### min  re train####=',min_mre)
             print('#### 3 sigma train ####=',sigma3)
-            if (max_mre < cfg.march_tol) or (mean_mre < cfg.march_tol*0.1):
-                save_model(model, cfg, Nt, bestModel = True)
+            if (max_mre < cfg.model.march_tolerance) or (mean_mre < cfg.model.march_tolerance*0.1):
+                save_model(model, cfg.run_dir, Nt, bestModel = True)
                 Nt += 1  # args.d_Nt
                 scheduler.step()
                 continue
@@ -59,7 +59,7 @@ def train_seq_shift(cfg,
                             down_sampler=down_sampler)
 
         print('Epoch elapsed ', time.time()-tic)
-    save_model(model, cfg, Nt, bestModel = False)
+    save_model(model, cfg.run_dir, Nt, bestModel = False)
 
 
 def train_epoch(cfg,
