@@ -34,6 +34,10 @@ class KuramotoSivashinsky1D(Dataset):
     dimension: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=1024)
     coarse_dimension: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=16)
 
+    @property
+    def solution_dimension(self):
+        return 1
+
     def dimensions(self):
         return [self.dimension]
 
@@ -50,6 +54,10 @@ class BackwardFacingStep2D(Dataset):
     dimension_width: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=512)
     coarse_dimension_height: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=32)
     coarse_dimension_width: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=32)
+
+    @property
+    def solution_dimension(self):
+        return 2
 
     def dimensions(self):
         return [self.dimension_height, self.dimension_width]
@@ -69,6 +77,10 @@ class ChannelFlow3D(Dataset):
     coarse_dimension_height: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=8)
     coarse_dimension_length: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=32)
     coarse_dimension_width: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=8)
+
+    @property
+    def solution_dimension(self):
+        return 3
 
     def dimensions(self):
         return [self.dimension_height, self.dimension_length, self.dimension_width]
