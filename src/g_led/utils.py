@@ -87,17 +87,12 @@ def read_args_txt(args, argtxt):
     return args
     return t
 
-def save_model(model, args, Nt, bestModel = False):
+def save_model(model, model_save_path, Nt, bestModel = False):
     if bestModel:
-        torch.save(model.state_dict(),
-                   os.path.join(args.model_save_path,
-                   'best_model_sofar'))
-        np.savetxt(os.path.join(args.model_save_path,
-                   'best_model_sofar_Nt'),np.ones(2)*Nt)
+        torch.save(model.state_dict(), model_save_path/'best_model_sofar')
+        np.savetxt(model_save_path/'best_model_sofar_Nt', np.ones(2) * Nt)
     else:
-        torch.save(model.state_dict(),
-                os.path.join(args.model_save_path,
-                'model_epoch_' + str(Nt)))
+        torch.save(model.state_dict(), model_save_path/f'model_epoch_{Nt}')
 
 def load_model(model,args_train,args_sample):
     if args_sample.usebestmodel:
