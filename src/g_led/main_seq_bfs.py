@@ -1,24 +1,27 @@
 import argparse
+import logging
 import os
-from datetime import datetime
-from pathlib import Path
 import pprint
+import sys
+from datetime import datetime
 
 import hydra
-from omegaconf import OmegaConf
 import torch
+from omegaconf import OmegaConf
 
 from conf import conf
+from g_led import utils
 from g_led.data import data_bfs_preprocess
 from g_led.train_test_seq.train_seq import train_seq_shift
 from g_led.transformer.sequentialModel import SequentialModel as transformer
-from g_led.utils import save_args
-from g_led import utils
+
+log = logging.getLogger(__file__)
 
 
 class Args:
     def __init__(self):
         self.parser = argparse.ArgumentParser()
+        self.parser.add_argument('hydra', nargs='*')
         """
         for dataset
         """
@@ -164,7 +167,9 @@ def main(cfg):
     conf.orm.create_all(engine)
     with conf.sa.orm.Session(engine) as db:
         cfg = conf.orm.instantiate_and_insert_config(db, OmegaConf.to_container(cfg, resolve=True))
-        pprint.pp(cfg)
+        log.info('Command: python %s', ' '.join(sys.argv))
+        log.info(pprint.pformat(cfg))
+        log.info('Output directory: %s', cfg.run_dir)
 
     # assert args.coarse_dim[0]*args.coarse_dim[1]*2 == args.n_embd
     # assert args.trajec_max_len_valid == args.n_ctx + 1
