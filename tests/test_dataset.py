@@ -5,6 +5,7 @@ from fixtures import init_hydra_cfg, engine
 
 from conf import conf
 from g_led.data import data_bfs_preprocess
+from g_led import dataset
 
 
 def test_backward_facing_step_old_and_new_datasets_equal(engine):
@@ -12,7 +13,7 @@ def test_backward_facing_step_old_and_new_datasets_equal(engine):
     conf.orm.create_all(engine)
     with conf.sa.orm.Session(engine) as db:
         cfg = conf.orm.instantiate_and_insert_config(db, cfg)
-        dl = data_bfs_preprocess.BackwardFacingStep2D(cfg.dataset)
+        dl = dataset.BackwardFacingStep2D(cfg.dataset)
         dl.prepare_data()
         dl.setup('validate')
         dset = data_bfs_preprocess.bfs_dataset(

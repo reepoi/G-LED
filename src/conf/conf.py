@@ -35,6 +35,13 @@ class Conf(orm.Table):
     dataset = orm.OneToManyField(conf.dataset.Dataset, required=True, default=omegaconf.MISSING)
     model = orm.OneToManyField(conf.model.Model, required=True, default=omegaconf.MISSING)
 
+    def __post_init__(self):
+        if self.dataset.trajectory_time_step_count_train - 1 != self.model.time_step_window_size:
+            raise ValueError(
+                'model.time_step_window_size must be one less than the dataset.trajectory_time_step_count_train so that the model can predict the last time step,'
+                f' but model.time_step_window_size={self.model.time_step_window_size} and dataset.trajectory_time_step_count_train={self.dataset.trajectory_time_step_count_train}.'
+            )
+
     @property
     def run_dir(self):
         return Path(self.out_dir)/self.run_subdir/self.alt_id

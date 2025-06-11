@@ -31,15 +31,14 @@ def test_epoch(cfg,
             batch = batch.to(cfg.device)
             b_size = batch.shape[0]
             num_time = batch.shape[1]
-            num_velocity = 2
-            batch = batch.reshape([b_size*num_time, num_velocity, *cfg.dataset.dimensions()])
+            batch = batch.reshape([b_size*num_time, cfg.dataset.solution_dimension, *cfg.dataset.dimensions()])
             batch_coarse = down_sampler(batch).reshape([b_size,
                                                         num_time,
-                                                        num_velocity,
+                                                        cfg.dataset.solution_dimension,
                                                         *cfg.dataset.coarse_dimensions()])
             batch_coarse_flatten = batch_coarse.reshape([b_size,
                                                          num_time,
-                                                         num_velocity * cfg.dataset.embedding_dimension])
+                                                         cfg.dataset.solution_dimension * cfg.dataset.embedding_dimension])
 
             past = None
             xn = batch_coarse_flatten[:,0:1,:]

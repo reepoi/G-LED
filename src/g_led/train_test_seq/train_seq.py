@@ -74,15 +74,14 @@ def train_epoch(cfg,
 
         b_size = batch.shape[0]
         num_time = batch.shape[1]
-        num_velocity = 2
-        batch = batch.reshape([b_size*num_time, num_velocity, *cfg.dataset.dimensions()])
+        batch = batch.reshape([b_size*num_time, cfg.dataset.solution_dimension, *cfg.dataset.dimensions()])
         batch_coarse = down_sampler(batch).reshape([b_size,
                                                     num_time,
-                                                    num_velocity,
+                                                    cfg.dataset.solution_dimension,
                                                     *cfg.dataset.coarse_dimensions()])
         batch_coarse_flatten = batch_coarse.reshape([b_size,
                                                      num_time,
-                                                     num_velocity * cfg.dataset.embedding_dimension])
+                                                     cfg.dataset.solution_dimension * cfg.dataset.embedding_dimension])
         assert num_time == cfg.model.time_step_window_size + 1
         for j in (range(num_time - cfg.model.time_step_window_size)):
             model.train()

@@ -5,9 +5,12 @@
         {
             "type": "python",
             "request": "launch",
-            "name": "Launch dataset",
+            "name": "Train sequential",
             "program": "/home/sci/ttransue/GitHub/G-LED/src/g_led/data/data_bfs_preprocess.py",
             "args": [
+                "rng_seed=0",
+                "model=TransformerBackwardFacingStep2D",
+                "dataset=BackwardFacingStep2D"
             ],
             "env": {
                 "CUDA_VISIBLE_DEVICES": "${input:gpu}"
