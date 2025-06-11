@@ -1,5 +1,3 @@
-import logging
-import os
 import pprint
 import sys
 
@@ -16,7 +14,7 @@ from g_led import callbacks, datasets, loggers, utils
 from g_led.transformer.sequentialModel import SequentialModel as Transformer
 
 
-log = logging.getLogger(__file__)
+log = utils.getLoggerByFilename(__file__)
 
 
 class TrainSequential(pl.LightningModule):
@@ -148,7 +146,7 @@ def main(cfg):
             filename='{epoch}__{forecast_time_step_count:.0f}',
             save_last='link',
             monitor='forecast_time_step_count',
-            save_top_k=-1,
+            save_top_k=2,
             save_on_train_epoch_end=False,
             enable_version_counter=False,
         )

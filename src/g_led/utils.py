@@ -1,5 +1,6 @@
 import argparse
 import json
+import logging
 import os
 import sys
 from pathlib import Path
@@ -15,6 +16,14 @@ from conf import conf
 
 DIR_ROOT = (Path(__file__).parent/'..'/'..').resolve()
 HYDRA_INIT = dict(version_base=None, config_path='../../conf', config_name='conf')
+
+
+def filename_relative_to_dir_root(filename):
+    return Path(filename).relative_to(DIR_ROOT)
+
+
+def getLoggerByFilename(filename):
+    return logging.getLogger(str(filename_relative_to_dir_root(filename)))
 
 
 def get_run_dir(hydra_init=HYDRA_INIT, commit=True, engine_name='runs'):
