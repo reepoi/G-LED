@@ -7,6 +7,7 @@ authors = [
 ]
 requires-python = ">=3.10"
 dependencies = [
+    "dapper==1.6.0",
     "hydra-orm>=0.1.0",
     "imagen-pytorch>=1.25.9",
     "lightning>=2.5.1.post0",
