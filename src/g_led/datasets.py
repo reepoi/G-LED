@@ -9,6 +9,7 @@ import hydra
 from omegaconf import OmegaConf
 import dapper.mods.KS
 from einops import rearrange, EinopsError
+from tqdm import tqdm
 
 from conf import conf, dataset
 from g_led import utils
@@ -187,7 +188,7 @@ class KuramotoSivashinksy1D(TrajectoryDataset):
         solver = self.etd_rk4_wrapper(self.cfg, 'cpu', domain_width)
 
         trajectories = []
-        for _ in range(self.cfg.trajectory_count_train + self.cfg.trajectory_count_val + self.cfg.trajectory_count_test):
+        for _ in tqdm(range(self.cfg.trajectory_count_train + self.cfg.trajectory_count_val + self.cfg.trajectory_count_test), desc='Computing trajectories'):
             x0 = torch.tensor(dapper.mods.KS.Model(
                 dt=self.cfg.trajectory_time_step_size_micro,
                 DL=domain_width,
@@ -242,11 +243,11 @@ class KuramotoSivashinksy1D(TrajectoryDataset):
         # g(CL).mean(axis=-1) ~= g(L), whose computation is more stable.
         CL = h * L[:, None] + roots  # Contour for (each element of) L
         # E * exact_integral of integrating factor:
-        Q = torch.tensor(h * ((np.exp(CL / 2) - 1) / CL).mean(axis=-1).real, device=device).unsqueeze(0)
+        Q = torch.tensor(h * ((np.exp(CL / 2) - 1) / CL).mean(axis=-1).real, dtype=dtype, device=device).unsqueeze(0)
         # RK4 coefficients (modified by Cox-Matthews):
-        f1 = torch.tensor(h * ((-4 - CL + np.exp(CL) * (4 - 3 * CL + CL ** 2)) / CL ** 3).mean(axis=-1).real, device=device).unsqueeze(0)
-        f2 = torch.tensor(h * ((2 + CL + np.exp(CL) * (-2 + CL)) / CL ** 3).mean(axis=-1).real, device=device).unsqueeze(0)
-        f3 = torch.tensor(h * ((-4 - 3 * CL - CL ** 2 + np.exp(CL) * (4 - CL)) / CL ** 3).mean(axis=-1).real, device=device).unsqueeze(0)
+        f1 = torch.tensor(h * ((-4 - CL + np.exp(CL) * (4 - 3 * CL + CL ** 2)) / CL ** 3).mean(axis=-1).real, dtype=dtype, device=device).unsqueeze(0)
+        f2 = torch.tensor(h * ((2 + CL + np.exp(CL) * (-2 + CL)) / CL ** 3).mean(axis=-1).real, dtype=dtype, device=device).unsqueeze(0)
+        f3 = torch.tensor(h * ((-4 - 3 * CL - CL ** 2 + np.exp(CL) * (4 - CL)) / CL ** 3).mean(axis=-1).real, dtype=dtype, device=device).unsqueeze(0)
 
         D = 1j * torch.tensor(kk, device=device, dtype=dtype)  # Differentiation to compute:  F[ u_x ]
 
@@ -320,8 +321,10 @@ def main(cfg):
         cfg = conf.orm.instantiate_and_insert_config(db, OmegaConf.to_container(cfg, resolve=True))
         db.commit()
         pprint.pp(cfg)
-        dataset = get_dataset(cfg.dataset)
-        dataset.prepare_data()
+        pl.seed_everything(cfg.rng_seed)
+        with pl.utilities.seed.isolate_rng():
+            dataset = get_dataset(cfg.dataset)
+            dataset.prepare_data()
         dataset.setup('fit')
         breakpoint()
         print('end')

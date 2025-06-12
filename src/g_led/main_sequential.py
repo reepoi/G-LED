@@ -63,14 +63,7 @@ class TrainSequential(pl.LightningModule):
         return dict(loss=loss)
 
     def validation_step(self, batch, _):
-        # if ite_thold is None:
-        #     pass
-        # else:
-        #     if iteration>ite_thold:
-        #         break
-        # batch = batch.to(args.device).float()
         batch, batch_idx, dataset_idx = batch
-        # log.info('Batch %d of validation dataset %d', batch_idx, dataset_idx)
         cached_keys_values = None
         coarse_batch = self.batch_to_coarse(batch)
         window_pred = coarse_batch[:, :1]
@@ -132,8 +125,14 @@ def main(cfg):
 
     # time_step_time_logger = loggers.CSVLogger(cfg.run_dir, name=None, name_metrics_file='time_step_times.csv')
 
-    down_sampler = nn.Upsample(size=cfg.dataset.coarse_dimensions(), mode='bilinear')
-    model = Transformer(cfg.model, 2 * cfg.dataset.embedding_dimension).to(cfg.device).float()
+    pl.seed_everything(cfg.rng_seed)
+    with pl.utilities.seed.isolate_rng():
+        dataset = datasets.get_dataset(cfg.dataset)
+        dataset.prepare_data()
+    with pl.utilities.seed.isolate_rng():
+        model = Transformer(cfg.model, cfg.dataset.solution_dimension * cfg.dataset.embedding_dimension)
+
+    down_sampler = nn.Upsample(size=cfg.dataset.coarse_dimensions(), mode=cfg.dataset.upsample_mode)
     train_sequential = TrainSequential(cfg, down_sampler, model)
 
     logger = loggers.CSVLogger(cfg.run_dir, name=None)
@@ -161,9 +160,11 @@ def main(cfg):
         reload_dataloaders_every_n_epochs=1,
         deterministic=True,
         callbacks=cbs,
+        # fast_dev_run=2,
+        # profiler='simple',
     )
 
-    trainer.fit(train_sequential, datamodule=datasets.get_dataset(cfg.dataset))
+    trainer.fit(train_sequential, datamodule=dataset)
 
 
 if __name__ == '__main__':

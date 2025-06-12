@@ -159,6 +159,10 @@ class KuramotoSivashinsky1D(Dataset):
     def embedding_dimension(self):
         return self.coarse_dimension
 
+    @property
+    def upsample_mode(self):
+        return 'linear'
+
 
 class BackwardFacingStep2D(Dataset):
     dimension_width: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=512)
@@ -178,7 +182,11 @@ class BackwardFacingStep2D(Dataset):
 
     @property
     def embedding_dimension(self):
-        return self.coarse_dimension_width * self.coarse_dimension_height
+        return self.coarse_dimension_width * self.coarse_dimension_length
+
+    @property
+    def upsample_mode(self):
+        return 'bilinear'
 
 
 class ChannelFlow3D(Dataset):
@@ -202,3 +210,7 @@ class ChannelFlow3D(Dataset):
     @property
     def embedding_dimension(self):
         return self.coarse_dimension_width * self.coarse_dimension_length * self.coarse_dimension_height
+
+    @property
+    def upsample_mode(self):
+        return 'trilinear'
