@@ -1,0 +1,11 @@
+defaults:
+  - _Transformer
+  - _self_
+
+epoch_count: 10000
+learning_rate: 1e-4
+learning_rate_decay: 0.99083194489
+
+attention_layer_count: 8
+attention_head_count: 4
+time_step_window_size: 512

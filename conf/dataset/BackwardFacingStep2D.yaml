@@ -2,12 +2,21 @@ defaults:
   - _BackwardFacingStep2D
   - _self_
 
-time_step_count_train: 8000
-time_step_count_val: 500
-time_step_count_test: 1496
+trajectory_count_train: 1
+trajectory_count_val: 1
+trajectories_are_shared_across_splits: true
 
-trajectory_time_step_count_train: 41
-trajectory_time_step_count_val: 450
+trajectory_time_step_size_micro: 2e-4
+trajectory_time_step_count_micro: 2498750
+
+trajectory_time_step_subsample_interval_macro: 250
+
+macro_time_step_count_train: 8000
+macro_time_step_count_val: 500
+macro_time_step_count_test: 1496
+
+time_step_window_size_train: 41
+time_step_window_size_val: 450
 
 batch_size_train: 16
 batch_size_val: 16

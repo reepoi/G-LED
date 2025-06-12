@@ -1,0 +1,16 @@
+defaults:
+  - _KuramotoSivashinsky1D
+  - _self_
+
+# trajectory_count_train: 21000
+# trajectory_count_val: 19000
+trajectory_count_train: 2
+trajectory_count_val: 1
+
+trajectory_time_step_size_micro: 0.025
+trajectory_time_step_count_micro: 3840
+
+trajectory_time_step_subsample_interval_macro: 10
+
+batch_size_train: 16
+batch_size_val: 16

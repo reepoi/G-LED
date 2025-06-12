@@ -35,12 +35,12 @@ class Conf(orm.Table):
     dataset = orm.OneToManyField(conf.dataset.Dataset, required=True, default=omegaconf.MISSING)
     model = orm.OneToManyField(conf.model.Model, required=True, default=omegaconf.MISSING)
 
-    def __post_init__(self):
-        if self.dataset.trajectory_time_step_count_train - 1 != self.model.time_step_window_size:
-            raise ValueError(
-                'model.time_step_window_size must be one less than the dataset.trajectory_time_step_count_train so that the model can predict the last time step,'
-                f' but model.time_step_window_size={self.model.time_step_window_size} and dataset.trajectory_time_step_count_train={self.dataset.trajectory_time_step_count_train}.'
-            )
+    # def __post_init__(self):
+    #     if self.dataset.time_step_window_size_train - 1 != self.model.time_step_window_size:
+    #         raise ValueError(
+    #             'model.time_step_window_size must be one less than the dataset.time_step_window_size_train so that the model can predict the last time step,'
+    #             f' but model.time_step_window_size={self.model.time_step_window_size} and dataset.time_step_window_size_train={self.dataset.time_step_window_size_train}.'
+    #         )
 
     @property
     def run_dir(self):
@@ -53,5 +53,6 @@ sa.event.listens_for(Conf, 'before_insert')(
 
 
 orm.store_config(Conf)
+orm.store_config(conf.dataset.KuramotoSivashinsky1D, group=Conf.dataset.key, name=f'_{conf.dataset.KuramotoSivashinsky1D.__name__}')
 orm.store_config(conf.dataset.BackwardFacingStep2D, group=Conf.dataset.key, name=f'_{conf.dataset.BackwardFacingStep2D.__name__}')
 orm.store_config(conf.model.Transformer, group=Conf.model.key, name=f'_{conf.model.Transformer.__name__}')
