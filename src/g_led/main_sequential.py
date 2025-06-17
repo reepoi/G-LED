@@ -39,6 +39,31 @@ class TrainSequential(pl.LightningModule):
     def setup(self, stage):
         pass
 
+    def forecast(self, forecast_time_step_count, initial_condition):
+        window_pred = initial_condition
+        window_pred_batch = [initial_condition]
+        cached_keys_values = None
+        for j in range(forecast_time_step_count):
+            if j == 0 or cached_keys_values[0][0].shape[2] < self.cfg.model.time_step_window_size:
+                # cached_keys_values[*][0].shape[2] is the number of time steps processed in the trajectory (i.e., in the context of LLMs, the number of tokens in the context)
+                window_shifted_by_1_pred, cached_keys_values, *_ = self.model(inputs_embeds=window_pred, past=cached_keys_values)
+            else:
+                # drop oldest key/value to maintain fixed context window
+                cached_keys_values = [
+                    [
+                        # keys
+                        cached_keys_values[layer][0][:, :, 1:],
+                        # values
+                        cached_keys_values[layer][1][:, :, 1:]
+                    ]
+                    for layer in range(self.cfg.model.attention_layer_count)
+                ]
+                window_shifted_by_1_pred, cached_keys_values, *_ = self.model(inputs_embeds=window_pred, past=cached_keys_values)
+            window_pred = window_shifted_by_1_pred
+            window_pred_batch.append(window_pred)
+        window_pred_batch = torch.cat(window_pred_batch, dim=1)
+        return window_pred_batch
+
     def batch_to_coarse(self, batch):
         batch_size, time_count = batch.shape[:2]
         coarse_batch = self.down_sampler(
@@ -64,50 +89,30 @@ class TrainSequential(pl.LightningModule):
 
     def validation_step(self, batch, _):
         batch, batch_idx, dataset_idx = batch
-        cached_keys_values = None
         coarse_batch = self.batch_to_coarse(batch)
-        window_pred = coarse_batch[:, :1]
+        initial_condition = coarse_batch[:, :1]
         coarse_batch = coarse_batch[:, 1:self.forecast_time_step_count+1]
-        window_pred_batch = []
-        for j in range(self.forecast_time_step_count):
-            if j == 0 or cached_keys_values[0][0].shape[2] < self.cfg.model.time_step_window_size:
-                # cached_keys_values[*][0].shape[2] is the number of time steps processed in the trajectory (i.e., in the context of LLMs, the number of tokens in the context)
-                window_shifted_by_1_pred, cached_keys_values, *_ = self.model(inputs_embeds=window_pred, past=cached_keys_values)
-            else:
-                # drop oldest key/value
-                cached_keys_values = [
-                    [
-                        # keys
-                        cached_keys_values[layer][0][:, :, 1:],
-                        # values
-                        cached_keys_values[layer][1][:, :, 1:]
-                    ]
-                    for layer in range(self.cfg.model.attention_layer_count)
-                ]
-                window_shifted_by_1_pred, cached_keys_values, *_ = self.model(inputs_embeds=window_pred, past=cached_keys_values)
-            window_pred = window_shifted_by_1_pred
-            window_pred_batch.append(window_pred)
-        window_pred_batch = torch.cat(window_pred_batch, dim=1)
+        window_pred_batch = self.forecast(self.forecast_time_step_count, initial_condition)
 
         # local_batch_size = windows_pred.shape[0]
-        relative_error_batch = reduce(
+        relative_rmse_batch = reduce(
             (window_pred_batch - coarse_batch).square(),
-            'batch time_step dim -> batch',
+            'batch time_step dim -> batch time_step',
             'mean'
-        ) / reduce(coarse_batch.square(), 'batch time_step dim -> batch', 'mean')
+        ).sqrt().mean(1) / reduce(coarse_batch.square(), 'batch time_step dim -> batch time_step', 'mean').sqrt().mean(1)
 
         if (
-            relative_error_batch.max() < self.cfg.model.march_tolerance
-            or relative_error_batch.mean() < 0.1 * self.cfg.model.march_tolerance
+            relative_rmse_batch.max() < self.cfg.model.march_tolerance
+            or relative_rmse_batch.mean() < 0.1 * self.cfg.model.march_tolerance
         ):
             self.forecast_time_step_count += 1
             self.lr_schedulers().step()
 
         return dict(
-            relative_error_max=relative_error_batch.max(),
-            relative_error_min=relative_error_batch.min(),
-            relative_error_mean=relative_error_batch.mean(),
-            relative_error_std=relative_error_batch.std(correction=0),
+            relative_rmse_max=relative_rmse_batch.max(),
+            relative_rmse_min=relative_rmse_batch.min(),
+            relative_rmse_mean=relative_rmse_batch.mean(),
+            relative_rmse_std=relative_rmse_batch.std(correction=0),
         )
         # return max(REs),min(REs),sum(REs)/len(REs),3*np.std(np.asarray(REs))
 
@@ -144,7 +149,7 @@ def main(cfg):
             dirpath=cfg.run_dir,
             filename='{epoch}__{forecast_time_step_count:.0f}',
             save_last='link',
-            monitor='forecast_time_step_count',
+            monitor='val_relative_rmse_mean',
             save_top_k=2,
             save_on_train_epoch_end=False,
             enable_version_counter=False,
@@ -155,7 +160,7 @@ def main(cfg):
         accelerator=cfg.device,
         devices=1,
         logger=logger,
-        max_epochs=-1,
+        max_epochs=cfg.model.epoch_count,
         check_val_every_n_epoch=None,
         reload_dataloaders_every_n_epochs=1,
         deterministic=True,
