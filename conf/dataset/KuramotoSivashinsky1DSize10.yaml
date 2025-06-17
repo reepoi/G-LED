@@ -1,0 +1,6 @@
+defaults:
+  - KuramotoSivashinsky1D
+  - _self_
+
+trajectory_count_train: 2100
+trajectory_count_val: 1900
