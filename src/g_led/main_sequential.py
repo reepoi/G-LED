@@ -39,12 +39,21 @@ class TrainSequential(pl.LightningModule):
     def setup(self, stage):
         pass
 
-    def forecast(self, forecast_time_step_count, initial_condition):
-        window_pred = initial_condition
-        window_pred_batch = [initial_condition]
-        cached_keys_values = None
-        for j in range(forecast_time_step_count):
-            if j == 0 or cached_keys_values[0][0].shape[2] < self.cfg.model.time_step_window_size:
+    def forecast(self, forecast_time_step_count, initial_sequence):
+        # process warm-up sequence of length 1 or more
+        if (time_step_count := initial_sequence.shape[1]) > self.cfg.model.time_step_window_size:
+            raise ValueError(
+                f'The time step count of the initial sequence ({time_step_count}) must be less than or equal to model.time_step_window_size ({self.cfg.model.time_step_window_size}).'
+                f' Please pass a initial sequence with at most {self.cfg.model.time_step_window_size} time steps, or set model.time_step_window_size={time_step_count} or larger.'
+            )
+        window_shifted_by_1_pred, cached_keys_values, *_ = self.model(inputs_embeds=initial_sequence, past=None)
+        window_pred_batch = [
+            initial_sequence[:, :1],  # save the initial state
+            window_shifted_by_1_pred,
+        ]
+        window_pred = window_shifted_by_1_pred[:, -1:]  # iterate the latest state
+        for time_step in range(forecast_time_step_count - 1):  # minus 1 because we already forecasted one time step past the warm-up sequence
+            if cached_keys_values[0][0].shape[2] < self.cfg.model.time_step_window_size:
                 # cached_keys_values[*][0].shape[2] is the number of time steps processed in the trajectory (i.e., in the context of LLMs, the number of tokens in the context)
                 window_shifted_by_1_pred, cached_keys_values, *_ = self.model(inputs_embeds=window_pred, past=cached_keys_values)
             else:
