@@ -326,7 +326,6 @@ def main(cfg):
             dataset = get_dataset(cfg.dataset)
             dataset.prepare_data()
         dataset.setup('fit')
-        breakpoint()
         print('end')
 
 
