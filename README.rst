@@ -127,4 +127,4 @@ Next, run the first GNU parallel command to begin running the experiments in par
 References
 ==========
 
-.. [gaoGenerativeLearningForecasting2024] `H. Gao, S. Kaltenbach, and P. Koumoutsakos, “Generative learning for forecasting the dynamics of high-dimensional complex systems,” Nat Commun, vol. 15, no. 1, p. 8904, Oct. 2024, doi: 10.1038/s41467-024-53165-w.`_
+.. [gaoGenerativeLearningForecasting2024] `H. Gao, S. Kaltenbach, and P. Koumoutsakos, "Generative learning for forecasting the dynamics of high-dimensional complex systems," Nat Commun, vol. 15, no. 1, p. 8904, Oct. 2024, doi: 10.1038/s41467-024-53165-w. <https://www.nature.com/articles/s41467-024-53165-w>`_
