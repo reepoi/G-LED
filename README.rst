@@ -11,6 +11,27 @@ Unofficial code to attempting to replicate the results of [gaoGenerativeLearning
 Installation
 ============
 
+#. Clone this repository, and then clone our fork of Imagen - Pytorch into a directory **next to where the directory where you cloned this repository.**
+
+   .. code:: bash
+
+      # This repository
+      git clone git@github.com:reepoi/G-LED.git
+      # Our fork of Imagen - Pytorch
+      git clone git@github.com:reepoi/imagen-pytorch.git
+
+#. ``cd`` into the directory where Imagen - Pytorch is cloned (e.g., `imagen-pytorch`) and checkout the `G-LED` branch.
+
+   .. code:: bash
+
+      git switch G-LED
+
+#. ``cd`` into the directory where this repository is cloned (e.g., `G-LED`) and checkout the `new-conf` branch.
+
+   .. code:: bash
+
+      git switch new-conf
+
 #. Install ``uv``:
 
    .. code:: bash
