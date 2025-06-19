@@ -42,6 +42,8 @@ Installation
       Due to a bug in ``hydra-orm``, the configuration settings mentioned here must be edited in their respective Python files.
       Command line overrides for these settings will be ignored.
 
+#. Edit the ``_data_dir`` field of the ``Dataset`` class in ``src/conf/dataset.py`` to the directory where you want the generated datasets to be saved.
+
 Supplementary documentation
 ===========================
 
