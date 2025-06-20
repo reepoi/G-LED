@@ -2,7 +2,7 @@ from dataclasses import field
 from typing import List, Any, Optional
 from pathlib import Path
 
-from omegaconf import II, SI
+from omegaconf import II
 import hydra_orm.utils
 from hydra_orm import orm
 import sqlalchemy as sa
@@ -15,7 +15,7 @@ class Dataset(orm.InheritableTable):
     _data_dir: str = field(default=str(Path('/mnta/taosData/diffusion-dynamics/G-LED/data').resolve()))
 
     rng_seed: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=II('oc.select:..rng_seed,0'))
-    _processed_filename: str = orm.make_field(orm.ColumnRequired(sa.String(8), index=True, unique=True), init=False, omegaconf_ignore=True)
+    _processed_filename: str = orm.make_field(orm.ColumnRequired(sa.String(8), index=True), init=False, omegaconf_ignore=True)
 
     trajectory_count_train: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=0)
     trajectory_count_val: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=0)
@@ -134,9 +134,30 @@ class Dataset(orm.InheritableTable):
         return macro_time_step_end
 
 
-sa.event.listens_for(Dataset, 'before_insert', propagate=True)(
-    hydra_orm.utils.set_attr_to_func_value(Dataset, Dataset._processed_filename.key, hydra_orm.utils.generate_random_string)
-)
+@sa.event.listens_for(Dataset, 'before_insert', propagate=True)
+def set_processed_filename(mapper, connection, target):
+    processed_dataset = connection.execute(
+        sa.select(Dataset._processed_filename)
+        .filter_by(
+            trajectory_count_train=target.trajectory_count_train,
+            trajectory_count_val=target.trajectory_count_val,
+            trajectory_count_test=target.trajectory_count_test,
+            trajectories_are_shared_across_splits=target.trajectories_are_shared_across_splits,
+            trajectory_time_step_size_micro=target.trajectory_time_step_size_micro,
+            trajectory_time_step_count_micro=target.trajectory_time_step_count_micro,
+        )
+        .distinct()
+    )
+    processed_dataset = list(zip(range(2), processed_dataset))
+    assert len(processed_dataset) <= 1
+    if len(processed_dataset) == 1:
+        target._processed_filename = processed_dataset[0][1][0]
+    else:
+        hydra_orm.utils.set_attr_to_func_value(
+            Dataset,
+            Dataset._processed_filename.key,
+            hydra_orm.utils.generate_random_string,
+        )(mapper, connection, target)
 
 
 class KuramotoSivashinsky1D(Dataset):
