@@ -3,6 +3,7 @@ import pprint
 import lightning.pytorch as pl
 import numpy as np
 import torch
+import torch.nn as nn
 from pytorch_lightning.utilities import CombinedLoader
 from torch.utils.data import DataLoader, IterableDataset
 import hydra
@@ -42,16 +43,14 @@ class TrajectoryDataset(pl.lightning.LightningDataModule):
     def load_trajectories(self):
         raise NotImplementedError()
 
-    def extract_from_trajectories(self, trajectories, start, end, trajectory_time_step_count):
+    def extract_from_trajectories(self, trajectories, start, end, time_step_window_size):
         raise NotImplementedError()
 
-    def get_train_split(self, trajectories, trajectory_time_step_count=None):
-        if trajectory_time_step_count is None:
-            trajectory_time_step_count = self.cfg.time_step_window_size_train
+    def get_train_split(self, trajectories, time_step_window_size):
         return self.extract_from_trajectories(
             trajectories[self.cfg.trajectory_start_train:self.cfg.trajectory_end_train],
             0, self.cfg.macro_time_step_count_train,
-            trajectory_time_step_count
+           time_step_window_size
         )
 
     def get_val_split(self, trajectories):
@@ -72,7 +71,7 @@ class TrajectoryDataset(pl.lightning.LightningDataModule):
         trajectories = self.load_trajectories()
         self.validate_trajectories(trajectories)
         if stage == 'fit':
-            self.train = self.get_train_split(trajectories)
+            self.train = self.get_train_split(trajectories, self.cfg.time_step_window_size_train)
             self.val_on_train = self.get_train_split(trajectories, self.cfg.time_step_window_size_val)
             self.val = self.get_val_split(trajectories)
             self.validate_splits(['train', 'val_on_train', 'val'])
@@ -300,6 +299,20 @@ class BackwardFacingStep2D(TrajectoryDataset):
             .unfold(1, time_step_window_size, 1),
             'trajectory trajectory_window component width length time -> (trajectory trajectory_window) time component width length'
         )
+
+
+class DownSampler(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.cfg = cfg
+        self.down_sampler = nn.Upsample(size=cfg.coarse_dimensions(), mode=cfg.upsample_mode)
+
+    def forward(self, batch):
+        batch_size, time_count = batch.shape[:2]
+        coarse_batch = self.down_sampler(
+            batch.view(-1, self.cfg.solution_dimension, *self.cfg.dimensions())
+        ).view(batch_size, time_count, self.cfg.solution_dimension * self.cfg.embedding_dimension)
+        return coarse_batch
 
 
 def get_dataset(cfg):

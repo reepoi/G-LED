@@ -73,18 +73,11 @@ class TrainSequential(pl.LightningModule):
         window_pred_batch = torch.cat(window_pred_batch, dim=1)
         return window_pred_batch
 
-    def batch_to_coarse(self, batch):
-        batch_size, time_count = batch.shape[:2]
-        coarse_batch = self.down_sampler(
-            batch.view(-1, self.cfg.dataset.solution_dimension, *self.cfg.dataset.dimensions())
-        ).view(batch_size, time_count, self.cfg.dataset.solution_dimension * self.cfg.dataset.embedding_dimension)
-        return coarse_batch
-
     def training_step(self, batch, batch_idx):
         optimizer = self.optimizers()
         optimizer.zero_grad()
 
-        coarse_batch = self.batch_to_coarse(batch)
+        coarse_batch = self.down_sampler(batch)
         window = coarse_batch[:, :self.cfg.model.time_step_window_size, :]
         window_shifted_by_1_pred, *_ = self.model(inputs_embeds=window, past=None)
         window_shifted_by_1 = coarse_batch[:, 1:self.cfg.model.time_step_window_size+1, :]
@@ -98,7 +91,7 @@ class TrainSequential(pl.LightningModule):
 
     def validation_step(self, batch, _):
         batch, batch_idx, dataset_idx = batch
-        coarse_batch = self.batch_to_coarse(batch)
+        coarse_batch = self.down_sampler(batch)
         initial_condition = coarse_batch[:, :1]
         coarse_batch = coarse_batch[:, 1:self.forecast_time_step_count+1]
         window_pred_batch = self.forecast(self.forecast_time_step_count, initial_condition)
@@ -110,20 +103,13 @@ class TrainSequential(pl.LightningModule):
             'mean'
         ).sqrt().mean(1) / reduce(coarse_batch.square(), 'batch time_step dim -> batch time_step', 'mean').sqrt().mean(1)
 
-        if (
-            relative_rmse_batch.max() < self.cfg.model.march_tolerance
-            or relative_rmse_batch.mean() < 0.1 * self.cfg.model.march_tolerance
-        ):
-            self.forecast_time_step_count += 1
-            self.lr_schedulers().step()
-
         return dict(
             relative_rmse_max=relative_rmse_batch.max(),
             relative_rmse_min=relative_rmse_batch.min(),
             relative_rmse_mean=relative_rmse_batch.mean(),
             relative_rmse_std=relative_rmse_batch.std(correction=0),
+            relative_rmse_sum=relative_rmse_batch.sum(),
         )
-        # return max(REs),min(REs),sum(REs)/len(REs),3*np.std(np.asarray(REs))
 
 
 @hydra.main(**utils.HYDRA_INIT)
@@ -146,12 +132,13 @@ def main(cfg):
     with pl.utilities.seed.isolate_rng():
         model = Transformer(cfg.model, cfg.dataset.solution_dimension * cfg.dataset.embedding_dimension)
 
-    down_sampler = nn.Upsample(size=cfg.dataset.coarse_dimensions(), mode=cfg.dataset.upsample_mode)
-    train_sequential = TrainSequential(cfg, down_sampler, model)
+    train_sequential = TrainSequential(cfg, datasets.DownSampler(cfg.dataset), model)
 
     logger = loggers.CSVLogger(cfg.run_dir, name=None)
 
     cbs = [
+        callbacks.MetricMonitorLRSchedulerStepper(cfg),
+
         callbacks.TimeStepProgressBar(cfg),
         callbacks.LogStats(),
         callbacks.ModelCheckpoint(
