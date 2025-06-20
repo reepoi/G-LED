@@ -7,6 +7,7 @@ trajectory_count_val: 19000
 
 trajectory_time_step_size_micro: 0.025
 trajectory_time_step_count_micro: 3840
+trajectory_time_step_count_drop_first_micro: 1000
 
 trajectory_time_step_subsample_interval_macro: 10
 
