@@ -25,6 +25,7 @@ class Dataset(orm.InheritableTable):
     trajectory_time_step_size_micro: float = orm.make_field(orm.ColumnRequired(sa.Double), default=0.)
     # excluding the initial condition
     trajectory_time_step_count_micro: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=0)
+    trajectory_time_step_count_drop_first_micro: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=0)
 
     trajectory_time_step_subsample_interval_macro: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=0)
 
@@ -145,6 +146,7 @@ def set_processed_filename(mapper, connection, target):
             trajectories_are_shared_across_splits=target.trajectories_are_shared_across_splits,
             trajectory_time_step_size_micro=target.trajectory_time_step_size_micro,
             trajectory_time_step_count_micro=target.trajectory_time_step_count_micro,
+            trajectory_time_step_count_drop_first_micro=target.trajectory_time_step_count_drop_first_micro,
         )
         .distinct()
     )

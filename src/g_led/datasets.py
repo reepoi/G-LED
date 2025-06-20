@@ -195,6 +195,8 @@ class KuramotoSivashinksy1D(TrajectoryDataset):
             ).x0, device=device, dtype=torch.float32)[None]
             state = x0 + torch.randn_like(x0)
 
+            for _ in range(self.cfg.trajectory_time_step_count_drop_first_micro):
+                state = solver(None, state)
             solution = [state]
             for _ in range(self.cfg.trajectory_time_step_count_micro):
                 state = solver(None, state)
