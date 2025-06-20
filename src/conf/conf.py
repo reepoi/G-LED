@@ -35,12 +35,12 @@ class Conf(orm.Table):
     dataset = orm.OneToManyField(conf.dataset.Dataset, required=True, default=omegaconf.MISSING)
     model = orm.OneToManyField(conf.model.Model, required=True, default=omegaconf.MISSING)
 
-    # def __post_init__(self):
-    #     if self.dataset.time_step_window_size_train - 1 != self.model.time_step_window_size:
-    #         raise ValueError(
-    #             'model.time_step_window_size must be one less than the dataset.time_step_window_size_train so that the model can predict the last time step,'
-    #             f' but model.time_step_window_size={self.model.time_step_window_size} and dataset.time_step_window_size_train={self.dataset.time_step_window_size_train}.'
-    #         )
+    def __post_init__(self):
+        if self.dataset.time_step_window_size_train is not None and self.model.time_step_window_size >= self.dataset.time_step_window_size_train:
+            raise ValueError(
+                'model.time_step_window_size must be at least one less than the dataset.time_step_window_size_train so that the model can attempt to predict at least one time step,'
+                f' but model.time_step_window_size={self.model.time_step_window_size} >= dataset.time_step_window_size_train={self.dataset.time_step_window_size_train}.'
+            )
 
     @property
     def run_dir(self):
