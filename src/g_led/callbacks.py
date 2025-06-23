@@ -52,10 +52,10 @@ class LogStats(pl.callbacks.Callback):
     def on_validation_start(self, trainer, pl_module):
         self.log('forecast_time_step_count', pl_module.forecast_time_step_count, on_epoch=True, prog_bar=True)
 
-    def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
-        batch, batch_idx, dataset_idx = batch
-        outputs = {f'{self.prefixes[dataset_idx]}_{k}': v for k, v in outputs.items() if k != 'relative_rmse_sum'}
-        self.log_dict(outputs, on_epoch=True, prog_bar=True, batch_size=batch.shape[0])
+    # def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
+    #     batch, batch_idx, dataset_idx = batch
+    #     outputs = {f'{self.prefixes[dataset_idx]}_{k}': v for k, v in outputs.items() if k != 'relative_rmse_sum'}
+    #     self.log_dict(outputs, on_epoch=True, prog_bar=True, batch_size=batch.shape[0])
 
 
 class MetricMonitorLRSchedulerStepper(pl.callbacks.Callback):
@@ -76,6 +76,8 @@ class MetricMonitorLRSchedulerStepper(pl.callbacks.Callback):
             self._metrics['sum'] += outputs['relative_rmse_sum']
 
     def on_validation_end(self, trainer, pl_module):
+        if trainer.sanity_checking:
+            return
         self._metrics['mean'] = self._metrics['sum'] / self._metrics['data_count']
         if (
             self._metrics['max'] < self.cfg.model.march_tolerance
@@ -83,3 +85,9 @@ class MetricMonitorLRSchedulerStepper(pl.callbacks.Callback):
         ):
             pl_module.lr_schedulers().step()
             pl_module.forecast_time_step_count += 1
+        pl_module.logger.experiment.log_metrics(dict(
+            epoch=trainer.current_epoch,
+            step=trainer.global_step,
+            val_on_train_relative_rmse_max=self._metrics['max'],
+            val_on_train_relative_rmse_mean=self._metrics['mean'],
+        ))
