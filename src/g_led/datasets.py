@@ -187,7 +187,10 @@ class KuramotoSivashinksy1D(TrajectoryDataset):
         solver = self.etd_rk4_wrapper(self.cfg, 'cpu', domain_width)
 
         trajectories = []
-        for _ in tqdm(range(self.cfg.trajectory_count_train + self.cfg.trajectory_count_val + self.cfg.trajectory_count_test), desc='Computing trajectories'):
+        trajectory_count = self.cfg.trajectory_count
+        if self.cfg.trajectories_are_shared_across_splits:
+            trajectory_count //= 3
+        for _ in tqdm(range(trajectory_count), desc='Computing trajectories'):
             x0 = torch.tensor(dapper.mods.KS.Model(
                 dt=self.cfg.trajectory_time_step_size_micro,
                 DL=domain_width,
