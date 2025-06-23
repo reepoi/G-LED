@@ -26,4 +26,5 @@ class Transformer(Trainable):
     output_hidden_states: bool = orm.make_field(orm.ColumnRequired(sa.Boolean), default=True)
     output_attentions: bool = orm.make_field(orm.ColumnRequired(sa.Boolean), default=True)
 
+    initial_sequence_time_step_count: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=1)
     march_tolerance: float = orm.make_field(orm.ColumnRequired(sa.Double), default=.1)
