@@ -92,9 +92,9 @@ class TrainSequential(pl.LightningModule):
     def validation_step(self, batch, _):
         batch, batch_idx, dataset_idx = batch
         coarse_batch = self.down_sampler(batch)
-        initial_condition = coarse_batch[:, :1]
-        coarse_batch = coarse_batch[:, 1:self.forecast_time_step_count+1]
-        window_pred_batch = self.forecast(self.forecast_time_step_count, initial_condition)
+        initial_condition = coarse_batch[:, :self.cfg.model.initial_sequence_time_step_count]
+        coarse_batch = coarse_batch[:, self.cfg.model.initial_sequence_time_step_count:self.cfg.model.initial_sequence_time_step_count+self.forecast_time_step_count]
+        window_pred_batch = self.forecast(self.forecast_time_step_count, initial_condition)[:, self.cfg.model.initial_sequence_time_step_count:]
 
         # local_batch_size = windows_pred.shape[0]
         relative_rmse_batch = reduce(
