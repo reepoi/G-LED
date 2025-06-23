@@ -72,10 +72,15 @@ class Dataset(orm.InheritableTable):
 
     @property
     def trajectory_time_step_count_macro(self):
-        return (
+        quotient, remainder = divmod(
             # add one to accomodate initial condition
-            self.trajectory_time_step_count_micro + 1
-        ) // self.trajectory_time_step_subsample_interval_macro + 1
+            self.trajectory_time_step_count_micro + 1,
+            self.trajectory_time_step_subsample_interval_macro
+        )
+        if remainder > 0:
+            return quotient + 1
+        else:
+            return quotient
 
     @property
     def trajectory_start_train(self):
