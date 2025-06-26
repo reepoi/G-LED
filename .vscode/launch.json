@@ -15,6 +15,37 @@
             "env": {
                 "CUDA_VISIBLE_DEVICES": "${input:gpu}"
             }
+        },
+        {
+            "type": "python",
+            "request": "launch",
+            "name": "Train upsampler",
+            "program": "/home/sci/ttransue/GitHub/G-LED/src/g_led/main_upsampler.py",
+            "args": [
+                "dataset=KuramotoSivashinsky1DSize1",
+                "model=ImagenKuramotoSivashinsky1D",
+                "dataset.batch_size_train=1",
+                "dataset.batch_size_val=1",
+                "dataset.time_step_window_size_train=null",
+                "dataset.time_step_window_size_val=null",
+                "dataset.trajectory_count_train=1",
+                "dataset.trajectory_count_val=1",
+                "dataset.trajectories_are_shared_across_splits=true"
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "${input:gpu}"
+            }
+        },
+        {
+            "type": "python",
+            "request": "launch",
+            "name": "Run temp",
+            "program": "/home/sci/ttransue/GitHub/G-LED/src/g_led/temp.py",
+            "args": [
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "${input:gpu}"
+            }
         }
     ],
     "inputs": [
