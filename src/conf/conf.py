@@ -36,7 +36,7 @@ class Conf(orm.Table):
     model = orm.OneToManyField(conf.model.Model, required=True, default=omegaconf.MISSING)
 
     def __post_init__(self):
-        if self.dataset.time_step_window_size_train is not None and self.model.time_step_window_size >= self.dataset.time_step_window_size_train:
+        if isinstance(self.model, conf.model.Transformer) and self.dataset.time_step_window_size_train is not None and self.model.time_step_window_size >= self.dataset.time_step_window_size_train:
             raise ValueError(
                 'model.time_step_window_size must be at least one less than the dataset.time_step_window_size_train so that the model can attempt to predict at least one time step,'
                 f' but model.time_step_window_size={self.model.time_step_window_size} >= dataset.time_step_window_size_train={self.dataset.time_step_window_size_train}.'
@@ -56,3 +56,4 @@ orm.store_config(Conf)
 orm.store_config(conf.dataset.KuramotoSivashinsky1D, group=Conf.dataset.key, name=f'_{conf.dataset.KuramotoSivashinsky1D.__name__}')
 orm.store_config(conf.dataset.BackwardFacingStep2D, group=Conf.dataset.key, name=f'_{conf.dataset.BackwardFacingStep2D.__name__}')
 orm.store_config(conf.model.Transformer, group=Conf.model.key, name=f'_{conf.model.Transformer.__name__}')
+orm.store_config(conf.model.Imagen, group=Conf.model.key, name=f'_{conf.model.Imagen.__name__}')

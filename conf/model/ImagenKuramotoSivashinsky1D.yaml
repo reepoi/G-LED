@@ -1,0 +1,5 @@
+defaults:
+  - _Imagen
+  - _self_
+
+epoch_count: 20
