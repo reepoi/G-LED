@@ -214,10 +214,11 @@ class KuramotoSivashinksy1D(TrajectoryDataset):
         return torch.load(self.cfg.data_dir/self.cfg.processed_filename)
 
     def extract_from_trajectories(self, trajectories, start, end, time_step_window_size):
+        trajectories = trajectories[:, start:end]
         if time_step_window_size is None:
             time_step_window_size = trajectories.shape[1]
         return rearrange(
-            trajectories[:, start:end]
+            trajectories
             .unfold(1, time_step_window_size, 1),
             'trajectory trajectory_window component space time -> (trajectory trajectory_window) time component space'
         )
@@ -297,10 +298,11 @@ class BackwardFacingStep2D(TrajectoryDataset):
         return torch.load(self.cfg.data_dir/self.cfg.processed_filename)
 
     def extract_from_trajectories(self, trajectories, start, end, time_step_window_size):
+        trajectories = trajectories[:, start:end]
         if time_step_window_size is None:
             time_step_window_size = trajectories.shape[1]
         return rearrange(
-            trajectories[:, start:end]
+            trajectories
             .unfold(1, time_step_window_size, 1),
             'trajectory trajectory_window component width length time -> (trajectory trajectory_window) time component width length'
         )
