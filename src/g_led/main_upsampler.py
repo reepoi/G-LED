@@ -35,13 +35,14 @@ class TrainUpsampler(pl.LightningModule):
         pass
 
     def training_step(self, batch, batch_idx):
-        batch_macro = self.downsampler(
-            batch.view(-1, self.cfg.dataset.solution_dimension, *self.cfg.dataset.dimensions())
-        )
-        batch_macro_interpolated_to_micro = self.upsampler(batch_macro).view(batch.shape)
+        self.optimizers().step()  # increment global step for logging and checkpointing
 
-        batch = batch.transpose(1, 2)[..., None]
-        batch_macro_interpolated_to_micro = batch_macro_interpolated_to_micro.transpose(1, 2)[..., None]
+        batch_macro_interpolated_to_micro = self.upsampler(self.downsampler(
+            batch.view(-1, self.cfg.dataset.solution_dimension, *self.cfg.dataset.dimensions())
+        )).view(batch.shape)
+
+        batch = batch.transpose(1, 2)
+        batch_macro_interpolated_to_micro = batch_macro_interpolated_to_micro.transpose(1, 2)
 
         loss = self.imagen_trainer(
             batch,
@@ -51,7 +52,7 @@ class TrainUpsampler(pl.LightningModule):
         )
         self.imagen_trainer.update(unet_number=1)
 
-        return dict(loss=loss)
+        return dict(loss=torch.tensor(loss))
 
     def validation_step(self, batch, batch_idx):
         pass
@@ -74,21 +75,22 @@ def main(cfg):
         dataset.prepare_data()
     with pl.utilities.seed.isolate_rng():
         unet1 = Unet3D(
-            dim=32,  # diff_args.unet_dim,
-            cond_images_channels=1,
+            dim=cfg.dataset.coarse_dimensions()[0],  # diff_args.unet_dim,
+            cond_images_channels=cfg.dataset.solution_dimension,
             memory_efficient=True,
             dim_mults=(1, 2, 4, 8),  # mid: mid channel
         )
+        width = cfg.dataset.dimensions()[0]
         imagen = ElucidatedImagen(
             unets=(unet1),
-            image_sizes=cfg.dataset.dimensions(),
-            image_width=cfg.dataset.dimensions()[0],
+            image_sizes=width,
+            image_width=width,
             channels=cfg.dataset.solution_dimension,   # Han Gao add the input to this args explicity
             random_crop_sizes=None,
             num_sample_steps=20,  # diff_args.num_sample_steps, # original is 10
             cond_drop_prob=0.1,
             sigma_min=0.002,
-            sigma_max=(80),      # max noise level, double the max noise level for upsampler  （80，160）
+            sigma_max=80,      # max noise level, double the max noise level for upsampler (80, 160)
             sigma_data=0.5,      # standard deviation of data distribution
             rho=7,               # controls the sampling schedule
             P_mean=-1.2,         # mean of log-normal distribution from which noise is drawn for training
@@ -115,9 +117,9 @@ def main(cfg):
             dirpath=cfg.run_dir,
             filename='{epoch}',
             save_last='link',
-            monitor='train_loss',
+            monitor='loss',
             save_top_k=2,
-            save_on_train_epoch_end=False,
+            save_on_train_epoch_end=True,
             enable_version_counter=False,
         )
     ]
