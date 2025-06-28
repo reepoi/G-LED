@@ -52,8 +52,28 @@ sa.event.listens_for(Conf, 'before_insert')(
 )
 
 
+class Trained(conf.models.Trainable):
+    conf = orm.OneToManyField(Conf, default=omegaconf.MISSING, enforce_element_type=False)
+    ckpt_filename: str = orm.make_field(orm.ColumnRequired(sa.String(len('epoch_####.ckpt'))), default='last.ckpt')
+
+    @staticmethod
+    def transform_conf(session, conf_alt_id):
+        if conf_alt_id == omegaconf.MISSING:
+            raise ValueError('Please set a conf alt_id with model.conf=<conf_alt_id>.')
+        conf = (
+            sa.select(Conf)
+            .where(Conf.alt_id == conf_alt_id)
+        )
+        conf = session.execute(conf)
+        conf = list(zip(range(2), conf))
+        assert len(conf) == 1
+        conf = conf[0][1][0]
+        return conf
+
+
 orm.store_config(Conf)
 orm.store_config(conf.dataset.KuramotoSivashinsky1D, group=Conf.dataset.key, name=f'_{conf.dataset.KuramotoSivashinsky1D.__name__}')
 orm.store_config(conf.dataset.BackwardFacingStep2D, group=Conf.dataset.key, name=f'_{conf.dataset.BackwardFacingStep2D.__name__}')
 orm.store_config(conf.model.Transformer, group=Conf.model.key, name=f'_{conf.model.Transformer.__name__}')
 orm.store_config(conf.model.Imagen, group=Conf.model.key, name=f'_{conf.model.Imagen.__name__}')
+orm.store_config(Trained, group=Conf.model.key)

@@ -4,4 +4,4 @@ defaults:
 
 epoch_count: 20
 
-time_step_window_size: 320
+time_step_window_size: 10

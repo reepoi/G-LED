@@ -31,4 +31,4 @@ class Transformer(Trainable):
 
 
 class Imagen(Trainable):
-    pass
+    time_step_window_size: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=0)

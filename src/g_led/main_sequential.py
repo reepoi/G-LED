@@ -10,7 +10,7 @@ import torch.nn.functional as F
 import lightning.pytorch as pl
 
 from conf import conf
-from g_led import callbacks, datasets, loggers, utils
+from g_led import callbacks, datasets, models, loggers, utils
 from g_led.transformer.sequentialModel import SequentialModel as Transformer
 
 
@@ -18,12 +18,12 @@ log = utils.getLoggerByFilename(__file__)
 
 
 class TrainSequential(pl.LightningModule):
-    def __init__(self, cfg, down_sampler, model):
+    def __init__(self, cfg, downsampler, model):
         super().__init__()
         self.automatic_optimization = False
 
         self.cfg = cfg
-        self.down_sampler = down_sampler
+        self.downsampler = downsampler
         self.model = model
         self.forecast_time_step_count = 1
 
@@ -77,7 +77,7 @@ class TrainSequential(pl.LightningModule):
         optimizer = self.optimizers()
         optimizer.zero_grad()
 
-        coarse_batch = self.down_sampler(batch)
+        coarse_batch = self.downsampler(batch, flatten_solution=True)
         window = coarse_batch[:, :self.cfg.model.time_step_window_size, :]
         window_shifted_by_1_pred, *_ = self.model(inputs_embeds=window, past=None)
         window_shifted_by_1 = coarse_batch[:, 1:self.cfg.model.time_step_window_size+1, :]
@@ -91,7 +91,7 @@ class TrainSequential(pl.LightningModule):
 
     def validation_step(self, batch, _):
         batch, batch_idx, dataset_idx = batch
-        coarse_batch = self.down_sampler(batch)
+        coarse_batch = self.downsampler(batch, flatten_solution=True)
         initial_condition = coarse_batch[:, :self.cfg.model.initial_sequence_time_step_count]
         coarse_batch = coarse_batch[:, self.cfg.model.initial_sequence_time_step_count:self.cfg.model.initial_sequence_time_step_count+self.forecast_time_step_count]
         window_pred_batch = self.forecast(self.forecast_time_step_count, initial_condition)[:, self.cfg.model.initial_sequence_time_step_count:]
@@ -130,9 +130,9 @@ def main(cfg):
         dataset = datasets.get_dataset(cfg.dataset)
         dataset.prepare_data()
     with pl.utilities.seed.isolate_rng():
-        model = Transformer(cfg.model, cfg.dataset.solution_dimension * cfg.dataset.embedding_dimension)
+        model = models.get_model(cfg)
 
-    train_sequential = TrainSequential(cfg, datasets.DownSampler(cfg.dataset), model)
+    train_sequential = TrainSequential(cfg, datasets.Downsampler(cfg.dataset), model)
 
     logger = loggers.CSVLogger(cfg.run_dir, name=None)
 

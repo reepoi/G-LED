@@ -308,18 +308,35 @@ class BackwardFacingStep2D(TrajectoryDataset):
         )
 
 
-class DownSampler(nn.Module):
+class Downsampler(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-        self.down_sampler = nn.Upsample(size=cfg.coarse_dimensions(), mode=cfg.upsample_mode)
+        self.downsampler = nn.Upsample(size=cfg.coarse_dimensions(), mode=cfg.upsample_mode)
+
+    def forward(self, batch, flatten_solution=False):
+        batch_size, time_count = batch.shape[:2]
+        batch_macro = self.downsampler(
+            batch.view(-1, self.cfg.solution_dimension, *self.cfg.dimensions())
+        ).view(batch_size, time_count, self.cfg.solution_dimension, *self.cfg.coarse_dimensions())
+        if flatten_solution:
+            batch_macro = batch_macro.view(batch_size, time_count, self.cfg.solution_dimension * self.cfg.embedding_dimension)
+        return batch_macro
+
+
+class Upsampler(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.cfg = cfg
+        self.upsampler = nn.Upsample(size=cfg.dimensions(), mode=cfg.upsample_mode)
 
     def forward(self, batch):
         batch_size, time_count = batch.shape[:2]
-        coarse_batch = self.down_sampler(
-            batch.view(-1, self.cfg.solution_dimension, *self.cfg.dimensions())
-        ).view(batch_size, time_count, self.cfg.solution_dimension * self.cfg.embedding_dimension)
-        return coarse_batch
+        batch_micro = self.upsampler(
+            batch.view(-1, self.cfg.solution_dimension, *self.cfg.coarse_dimensions())
+        ).view(batch_size, time_count, self.cfg.solution_dimension, *self.cfg.dimensions())
+        return batch_micro
+
 
 
 def get_dataset(cfg):
