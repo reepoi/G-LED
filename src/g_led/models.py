@@ -2,13 +2,14 @@ import torch
 
 from imagen_pytorch import ElucidatedImagen, ImagenTrainer, Unet3D
 
-from conf import model
+from conf import conf, model
 from g_led.transformer.sequentialModel import SequentialModel as Transformer
 
 
 def get_model(cfg):
     if isinstance(cfg.model, model.Transformer):
-        return Transformer(cfg.model, cfg.dataset.solution_dimension * cfg.dataset.embedding_dimension)
+        ckpt_path = None
+        return Transformer(cfg.model, cfg.dataset.solution_dimension * cfg.dataset.embedding_dimension), ckpt_path
     elif isinstance(cfg.model, model.Imagen):
         unet1 = Unet3D(
             dim=cfg.dataset.coarse_dimensions()[0],  # diff_args.unet_dim,
@@ -38,8 +39,11 @@ def get_model(cfg):
             condition_on_text=False,
             auto_normalize_img=False  # Han Gao make it false
         )
-        return ImagenTrainer(imagen, device=torch.device(cfg.device))
-    elif isinstance(cfg.model, model.Trained):
-        return get_model(cfg.model.conf)
+        ckpt_path = None
+        return ImagenTrainer(imagen, device=torch.device(cfg.device)), ckpt_path
+    elif isinstance(cfg.model, conf.Trained):
+        ckpt_path = cfg.model.conf.run_dir/cfg.model.ckpt_filename
+        m, _ = get_model(cfg.model.conf)
+        return m, ckpt_path
     else:
         raise ValueError(f'Unknown model: {cfg}')

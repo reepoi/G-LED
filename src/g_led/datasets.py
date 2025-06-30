@@ -33,6 +33,9 @@ class GeneratorDataset(IterableDataset):
 
 
 class TrajectoryDataset(pl.lightning.LightningDataModule):
+    dataset_idx_to_dataset_name = dict(enumerate(('train', 'val_on_train', 'val', 'test')))
+    dataset_name_to_dataset_idx = dict(map(reversed, dataset_idx_to_dataset_name.items()))
+
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
@@ -82,10 +85,11 @@ class TrajectoryDataset(pl.lightning.LightningDataModule):
         elif stage == 'test':
             self.test = self.get_test_split(trajectories)
         elif stage == 'predict':
+            self.train = self.get_train_split(trajectories, self.cfg.time_step_window_size_train)
             self.val_on_train = self.get_train_split(trajectories, self.cfg.time_step_window_size_val)
             self.val = self.get_val_split(trajectories)
             self.test = self.get_test_split(trajectories)
-            self.validate_splits(['val_on_train', 'val', 'test'])
+            self.validate_splits([*self.dataset_name_to_dataset_idx.keys()])
         else:
             raise ValueError(f'Unknown stage: {stage}')
 
@@ -142,6 +146,11 @@ class TrajectoryDataset(pl.lightning.LightningDataModule):
         if has_validation_error:
             raise RuntimeError('The trajectory splits did not pass validation. See the logs for more details.')
 
+    @classmethod
+    def assert_dataloader_order(cls, dataloaders):
+        dataset_idxs = [cls.dataset_name_to_dataset_idx[k] for k in dataloaders.keys()]
+        assert all(b - a == 1 for a, b in zip(dataset_idxs, dataset_idxs[1:]))
+
     def train_dataloader(self, shuffle=True):
         return DataLoader(self.train, shuffle=shuffle, batch_size=self.cfg.batch_size_train)
 
@@ -157,6 +166,8 @@ class TrajectoryDataset(pl.lightning.LightningDataModule):
             if limit is not None:
                 dataloaders[split] = DataLoader(GeneratorDataset([batch for _, batch in zip(range(limit), dataloader)]), collate_fn=lambda x: x[0])
 
+        self.assert_dataloader_order(dataloaders)
+
         if combined:
             return CombinedLoader(dataloaders, mode='sequential')
 
@@ -166,8 +177,13 @@ class TrajectoryDataset(pl.lightning.LightningDataModule):
         return DataLoader(self.test, shuffle=shuffle, batch_size=self.cfg.batch_size_test)
 
     def predict_dataloader(self, shuffle=False, combined=True, val_split_limits=None):
-        dataloaders = self.val_dataloader(shuffle=shuffle, combined=False, split_limits=val_split_limits)
+        dataloaders = dict(train=self.train_dataloader(shuffle=shuffle))
+        if val_split_limits is None:
+            val_split_limits = dict(val_on_train=None, val=None)
+        dataloaders.update(self.val_dataloader(shuffle=shuffle, combined=False, split_limits=val_split_limits))
         dataloaders['test'] = self.test_dataloader(shuffle=shuffle)
+
+        self.assert_dataloader_order(dataloaders)
 
         if combined:
             return CombinedLoader(dataloaders, mode='sequential')

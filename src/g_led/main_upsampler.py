@@ -1,3 +1,4 @@
+from collections import defaultdict
 import pprint
 import sys
 
@@ -21,6 +22,7 @@ class TrainUpsampler(pl.LightningModule):
     def __init__(self, cfg, downsampler, upsampler, imagen_trainer):
         super().__init__()
         self.automatic_optimization = False
+        self.strict_loading = False
 
         self.cfg = cfg
         self.downsampler = downsampler
@@ -35,9 +37,13 @@ class TrainUpsampler(pl.LightningModule):
         pass
 
     def upsample(self, batch_macro):
+        if isinstance(self.cfg.model, conf.Trained):
+            time_step_window_size = self.cfg.model.conf.model.time_step_window_size
+        else:
+            time_step_window_size = self.cfg.model.time_step_window_size
         batch_macro_interpolated_to_micro = self.upsampler(batch_macro)
         batch_micro = self.imagen_trainer.sample(
-            video_frames=self.cfg.model.time_step_window_size,
+            video_frames=time_step_window_size,
             cond_images=batch_macro_interpolated_to_micro.transpose(1, 2)
         )
         return batch_micro
@@ -59,6 +65,13 @@ class TrainUpsampler(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         pass
 
+    def predict_step(self, batch, batch_idx):
+        batch, batch_idx, dataset_idx = batch
+        batch_macro = self.upsample(self.downsampler(batch))
+        return {
+            datasets.TrajectoryDataset.dataset_idx_to_dataset_name[dataset_idx]: batch_macro
+        }
+
 
 @hydra.main(**utils.HYDRA_INIT)
 def main(cfg):
@@ -76,7 +89,7 @@ def main(cfg):
         dataset = datasets.get_dataset(cfg.dataset)
         dataset.prepare_data()
     with pl.utilities.seed.isolate_rng():
-        imagen_trainer = models.get_model(cfg)
+        imagen_trainer, ckpt_path = models.get_model(cfg)
 
     downsampler = datasets.Downsampler(cfg.dataset)
     upsampler = datasets.Upsampler(cfg.dataset)
@@ -111,7 +124,16 @@ def main(cfg):
         # profiler='simple',
     )
 
-    trainer.fit(train_upsampler, datamodule=dataset)
+    if cfg.fit:
+        trainer.fit(train_upsampler, datamodule=dataset, ckpt_path=ckpt_path)
+    if cfg.predict:
+        prediction_batches = trainer.predict(train_upsampler, datamodule=dataset, ckpt_path=ckpt_path)
+        predictions = defaultdict(list)
+        for batch in prediction_batches:
+            for k, v in batch.items():
+                predictions[k].append(v)
+        for k, v in predictions.items():
+            torch.save(torch.cat(v).cpu(), cfg.run_dir/f'pred_{k}.pt')
 
 
 if __name__ == '__main__':

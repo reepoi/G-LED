@@ -31,6 +31,7 @@ class Conf(orm.Table):
     alt_id: str = orm.make_field(orm.ColumnRequired(sa.String(8), index=True, unique=True), init=False, omegaconf_ignore=True)
     rng_seed: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=2376999025)
     fit: bool = orm.make_field(orm.ColumnRequired(sa.Boolean), default=True)
+    predict: bool = orm.make_field(orm.ColumnRequired(sa.Boolean), default=False)
 
     dataset = orm.OneToManyField(conf.dataset.Dataset, required=True, default=omegaconf.MISSING)
     model = orm.OneToManyField(conf.model.Model, required=True, default=omegaconf.MISSING)
@@ -52,9 +53,21 @@ sa.event.listens_for(Conf, 'before_insert')(
 )
 
 
-class Trained(conf.models.Trainable):
+class Trained(conf.model.Trainable):
     conf = orm.OneToManyField(Conf, default=omegaconf.MISSING, enforce_element_type=False)
     ckpt_filename: str = orm.make_field(orm.ColumnRequired(sa.String(len('epoch_####.ckpt'))), default='last.ckpt')
+
+    # def __getattr__(self, attr):
+    #     if attr != 'conf':
+    #         breakpoint()
+    #         if hasattr(self.conf.model, attr):
+    #             return getattr(self.conf.model, attr)
+    #         else:
+    #             raise AttributeError(
+    #                 f"Neither '{self.__class__.__name__}' nor '{self.conf.model.__class__.__name__}' objects have attribute '{attr}'"
+    #             )
+    #     else:
+    #         return super().__getattr(attr)
 
     @staticmethod
     def transform_conf(session, conf_alt_id):

@@ -132,7 +132,7 @@ class Dataset(orm.InheritableTable):
 
     @property
     def macro_time_step_end_test(self):
-        macro_time_step_end_val = self.macro_time_step_end_val()
+        macro_time_step_end_val = self.macro_time_step_end_val
         if macro_time_step_end_val is None or self.macro_time_step_count_test is None:
             macro_time_step_end = None
         else:
