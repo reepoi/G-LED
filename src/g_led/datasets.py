@@ -151,16 +151,20 @@ class TrajectoryDataset(pl.lightning.LightningDataModule):
         dataset_idxs = [cls.dataset_name_to_dataset_idx[k] for k in dataloaders.keys()]
         assert all(b - a == 1 for a, b in zip(dataset_idxs, dataset_idxs[1:]))
 
-    def train_dataloader(self, shuffle=True):
+    def train_dataloader(self, shuffle=None):
+        if shuffle is None:
+            shuffle = self.cfg.dataloader_shuffle_train
         return DataLoader(self.train, shuffle=shuffle, batch_size=self.cfg.batch_size_train)
 
-    def val_dataloader(self, shuffle=True, combined=True, split_limits=None):
+    def val_dataloader(self, shuffle=None, combined=True, split_limits=None):
+        if shuffle is None:
+            shuffle = self.cfg.dataloader_shuffle_val
         val_on_train = DataLoader(self.val_on_train, shuffle=shuffle, batch_size=self.cfg.batch_size_val)
         val = DataLoader(self.val, shuffle=shuffle, batch_size=self.cfg.batch_size_val)
         dataloaders = dict(val_on_train=val_on_train, val=val)
 
         if split_limits is None:
-            split_limits = dict(val_on_train=5, val=2)
+            split_limits = dict(val_on_train=self.cfg.dataloader_val_split_limits_val_on_train, val=self.cfg.dataloader_val_split_limits_val)
         for split, dataloader in dataloaders.items():
             limit = split_limits[split]
             if limit is not None:
@@ -173,10 +177,14 @@ class TrajectoryDataset(pl.lightning.LightningDataModule):
 
         return dataloaders
 
-    def test_dataloader(self, shuffle=False):
+    def test_dataloader(self, shuffle=None):
+        if shuffle is None:
+            shuffle = self.cfg.dataloader_shuffle_test
         return DataLoader(self.test, shuffle=shuffle, batch_size=self.cfg.batch_size_test)
 
-    def predict_dataloader(self, shuffle=False, combined=True, val_split_limits=None):
+    def predict_dataloader(self, shuffle=None, combined=True, val_split_limits=None):
+        if shuffle is None:
+            shuffle = self.cfg.dataloader_shuffle_predict
         dataloaders = dict(train=self.train_dataloader(shuffle=shuffle))
         if val_split_limits is None:
             val_split_limits = dict(val_on_train=None, val=None)
@@ -314,7 +322,7 @@ class BackwardFacingStep2D(TrajectoryDataset):
         return torch.load(self.cfg.data_dir/self.cfg.processed_filename)
 
     def extract_from_trajectories(self, trajectories, start, end, time_step_window_size):
-        trajectories = trajectories[:, start:end]
+        trajectories = trajectories[:, self.cfg.trajectory_time_step_count_drop_first_micro:][:, start:end]
         if time_step_window_size is None:
             time_step_window_size = trajectories.shape[1]
         return rearrange(

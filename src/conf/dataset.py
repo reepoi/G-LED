@@ -43,6 +43,14 @@ class Dataset(orm.InheritableTable):
     batch_size_val: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=0)
     batch_size_test: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=II('.batch_size_val'))
 
+    dataloader_shuffle_train: bool = orm.make_field(orm.ColumnRequired(sa.Boolean), default=True)
+    dataloader_shuffle_val: bool = orm.make_field(orm.ColumnRequired(sa.Boolean), default=False)
+    dataloader_shuffle_test: bool = orm.make_field(orm.ColumnRequired(sa.Boolean), default=False)
+    dataloader_shuffle_predict: bool = orm.make_field(orm.ColumnRequired(sa.Boolean), default=False)
+
+    dataloader_val_split_limits_val_on_train: Optional[int] = orm.make_field(sa.Column(sa.Integer), default=5)
+    dataloader_val_split_limits_val: Optional[int] = orm.make_field(sa.Column(sa.Integer), default=2)
+
     def __post_init__(self):
         if self.trajectories_are_shared_across_splits:
             if (
