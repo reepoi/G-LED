@@ -24,7 +24,6 @@ class TrainUpsampler(pl.LightningModule):
         self.downsampler = downsampler
         self.upsampler = upsampler
         self.imagen_trainer = imagen_trainer
-        self.forecast_time_step_count = 1
 
     def configure_optimizers(self):
         return None
@@ -108,7 +107,9 @@ def main(cfg):
     ]
     trainer = pl.Trainer(
         # detect_anomaly=True,
+        # strategy='ddp',
         accelerator=cfg.device,
+        # devices=4,
         devices=1,
         logger=logger,
         max_epochs=cfg.model.epoch_count,
@@ -116,6 +117,7 @@ def main(cfg):
         reload_dataloaders_every_n_epochs=1,
         deterministic=True,
         callbacks=cbs,
+        # log_every_n_steps=5,
         # fast_dev_run=2,
         # profiler='simple',
     )

@@ -43,6 +43,14 @@ class TimeStepProgressBar(pl.callbacks.TQDMProgressBar):
         return items
 
 
+class LogStats(pl.callbacks.Callback):
+    prefixes = {0: 'val_on_train', 1: 'val'}
+
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
+        log_kwargs = dict(batch_size=batch.shape[0], on_epoch=True, sync_dist=True, prog_bar=True)
+        self.log_dict(outputs, **log_kwargs)
+
+
 class LogStatsSequential(pl.callbacks.Callback):
     prefixes = {0: 'val_on_train', 1: 'val'}
 
