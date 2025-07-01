@@ -2,14 +2,10 @@ from collections import defaultdict
 import pprint
 import sys
 
-from einops import reduce
 import hydra
 from omegaconf import OmegaConf
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import lightning.pytorch as pl
-from imagen_pytorch import ElucidatedImagen, ImagenTrainer, Unet3D, Unet
 
 from conf import conf
 from g_led import callbacks, datasets, models, loggers, utils
@@ -45,7 +41,7 @@ class TrainUpsampler(pl.LightningModule):
         batch_micro = self.imagen_trainer.sample(
             video_frames=time_step_window_size,
             cond_images=batch_macro_interpolated_to_micro.transpose(1, 2)
-        )
+        ).transpose(1, 2)
         return batch_micro
 
     def training_step(self, batch, batch_idx):
