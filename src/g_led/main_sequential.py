@@ -7,6 +7,7 @@ from omegaconf import OmegaConf
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchinfo
 import lightning.pytorch as pl
 
 from conf import conf
@@ -130,43 +131,57 @@ def main(cfg):
         dataset = datasets.get_dataset(cfg.dataset)
         dataset.prepare_data()
     with pl.utilities.seed.isolate_rng():
-        model = models.get_model(cfg)
+        model, ckpt_path = models.get_model(cfg)
+
+    log.info(
+        'torchinfo:\n%s',
+        torchinfo.summary(
+            model,
+            input_data=torch.ones(
+                cfg.dataset.batch_size_train,
+                cfg.model.time_step_window_size,
+                cfg.dataset.solution_dimension * cfg.dataset.embedding_dimension
+            )
+        )
+    )
 
     train_sequential = TrainSequential(cfg, datasets.Downsampler(cfg.dataset), model)
 
     logger = loggers.CSVLogger(cfg.run_dir, name=None)
 
     cbs = [
-        callbacks.MetricMonitorLRSchedulerStepper(cfg),
-
         callbacks.TimeStepProgressBar(cfg),
-        callbacks.LogStats(),
-        callbacks.ModelCheckpoint(
-            dirpath=cfg.run_dir,
-            filename='{epoch}__{forecast_time_step_count:.0f}',
-            save_last='link',
-            monitor='forecast_time_step_count',
-            mode='max',
-            save_top_k=2,
-            save_on_train_epoch_end=False,
-            enable_version_counter=False,
-        )
+        callbacks.LogStatsSequential(),  # callbacks.LogStatsSequential saves the checkpoints
+        # callbacks.ModelCheckpoint(
+        #     dirpath=cfg.run_dir,
+        #     filename='{epoch}__{forecast_time_step_count:.0f}',
+        #     save_last='link',
+        #     monitor='ckpt_metric',
+        #     mode='min',
+        #     save_top_k=2,
+        #     save_on_train_epoch_end=False,
+        #     enable_version_counter=False,
+        # ),
     ]
     trainer = pl.Trainer(
         # detect_anomaly=True,
+        # strategy='ddp',
+        strategy='ddp_find_unused_parameters_true',
         accelerator=cfg.device,
-        devices=1,
+        devices=3,
+        # devices=1,
         logger=logger,
         max_epochs=cfg.model.epoch_count,
         check_val_every_n_epoch=None,
         reload_dataloaders_every_n_epochs=1,
         deterministic=True,
         callbacks=cbs,
+        enable_checkpointing=False,  # callbacks.LogStatsSequential saves the checkpoints
         # fast_dev_run=2,
         # profiler='simple',
     )
 
-    trainer.fit(train_sequential, datamodule=dataset)
+    trainer.fit(train_sequential, datamodule=dataset, ckpt_path=ckpt_path)
 
 
 if __name__ == '__main__':

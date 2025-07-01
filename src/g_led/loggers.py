@@ -3,6 +3,12 @@ from pathlib import Path
 import typing_extensions
 
 import lightning.pytorch as pl
+import lightning.fabric.loggers.logger
+
+from g_led import utils
+
+
+log = utils.getLoggerByFilename(__file__)
 
 
 class CSVLogger(pl.loggers.CSVLogger):
@@ -23,8 +29,10 @@ class CSVLogger(pl.loggers.CSVLogger):
             flush_logs_every_n_steps=flush_logs_every_n_steps,
         )
         self.experiment.NAME_METRICS_FILE = name_metrics_file
-        self.experiment.metrics_file_path = os.path.join(self.experiment.log_dir, self.experiment.NAME_METRICS_FILE)
-        Path(self.experiment.metrics_file_path).unlink(missing_ok=True)
+        # log.info(self.experiment.log_dir)
+        if not isinstance(self.experiment, lightning.fabric.loggers.logger._DummyExperiment):
+            self.experiment.metrics_file_path = os.path.join(self.experiment.log_dir, self.experiment.NAME_METRICS_FILE)
+            Path(self.experiment.metrics_file_path).unlink(missing_ok=True)
 
     @property
     @typing_extensions.override

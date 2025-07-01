@@ -43,51 +43,52 @@ class TimeStepProgressBar(pl.callbacks.TQDMProgressBar):
         return items
 
 
-class LogStats(pl.callbacks.Callback):
+class LogStatsSequential(pl.callbacks.Callback):
     prefixes = {0: 'val_on_train', 1: 'val'}
 
+    def __init__(self):
+        super().__init__()
+        self.ckpt_monitor = None
+        self.forecast_time_step_count_and_ckpt_path = None
+
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
-        self.log_dict(outputs, on_epoch=True, prog_bar=True, batch_size=batch.shape[0])
+        log_kwargs = dict(batch_size=batch.shape[0], on_epoch=True, sync_dist=True, prog_bar=True)
+        self.log_dict(outputs, **log_kwargs)
 
     def on_validation_start(self, trainer, pl_module):
         self.log('forecast_time_step_count', pl_module.forecast_time_step_count, on_epoch=True, prog_bar=True)
 
-    # def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
-    #     batch, batch_idx, dataset_idx = batch
-    #     outputs = {f'{self.prefixes[dataset_idx]}_{k}': v for k, v in outputs.items() if k != 'relative_rmse_sum'}
-    #     self.log_dict(outputs, on_epoch=True, prog_bar=True, batch_size=batch.shape[0])
-
-
-class MetricMonitorLRSchedulerStepper(pl.callbacks.Callback):
-    def __init__(self, cfg):
-        super().__init__()
-        self.cfg = cfg
-        self._metrics = defaultdict(lambda: 0)
-        self.prefixes = {0: 'val_on_train', 1: 'val'}
-
-    def on_validation_start(self, trainer, pl_module):
-        self._metrics = defaultdict(lambda: 0)
-
     def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
-        batch, _, dataset_idx = batch
-        self._metrics['data_count'] += batch.shape[0]
-        if self.prefixes[dataset_idx] == 'val_on_train':
-            self._metrics['max'] = max(self._metrics['max'], outputs['relative_rmse_max'])
-            self._metrics['sum'] += outputs['relative_rmse_sum']
+        batch, batch_idx, dataset_idx = batch
+        log_kwargs = dict(batch_size=batch.shape[0], on_epoch=True, sync_dist=True, prog_bar=True)
+        self.log(f'{self.prefixes[dataset_idx]}_relative_rmse_mean', outputs['relative_rmse_mean'], **log_kwargs)
+        self.log(f'{self.prefixes[dataset_idx]}_relative_rmse_max', outputs['relative_rmse_max'], reduce_fx='max', **log_kwargs)
 
     def on_validation_end(self, trainer, pl_module):
         if trainer.sanity_checking:
             return
-        self._metrics['mean'] = self._metrics['sum'] / self._metrics['data_count']
-        if (
-            self._metrics['max'] < self.cfg.model.march_tolerance
-            or self._metrics['mean'] < (0.1)**(1/2) * self.cfg.model.march_tolerance
-        ):
+        should_increment_forecast_time_step_count = (
+            trainer.callback_metrics['val_on_train_relative_rmse_max'] < pl_module.cfg.model.march_tolerance
+            or trainer.callback_metrics['val_on_train_relative_rmse_mean'] < (0.1)**(1/2) * pl_module.cfg.model.march_tolerance
+        )
+
+        # If using multiple devices, make sure all processes are unanimous on the decision.
+        should_increment_forecast_time_step_count = trainer.strategy.reduce_boolean_decision(should_increment_forecast_time_step_count)
+
+        if should_increment_forecast_time_step_count:
             pl_module.lr_schedulers().step()
             pl_module.forecast_time_step_count += 1
-        pl_module.logger.experiment.log_metrics(dict(
-            epoch=trainer.current_epoch,
-            step=trainer.global_step,
-            val_on_train_relative_rmse_max=self._metrics['max'],
-            val_on_train_relative_rmse_mean=self._metrics['mean'],
-        ))
+            self.ckpt_monitor = None
+
+        current_ckpt_monitor_value = trainer.callback_metrics['val_on_train_relative_rmse_mean']
+        should_save_ckpt = should_increment_forecast_time_step_count or (
+            self.ckpt_monitor is None or current_ckpt_monitor_value < self.ckpt_monitor
+        )
+        should_save_ckpt = trainer.strategy.reduce_boolean_decision(should_save_ckpt)
+        if should_save_ckpt:
+            self.ckpt_monitor = current_ckpt_monitor_value
+            current_ckpt_filepath = pl_module.cfg.run_dir/f"epoch_{trainer.current_epoch}__forecast_time_step_count_{trainer.callback_metrics['forecast_time_step_count']:.0f}.ckpt"
+            trainer.save_checkpoint(current_ckpt_filepath)
+            if self.forecast_time_step_count_and_ckpt_path is not None and self.forecast_time_step_count_and_ckpt_path[0] == trainer.callback_metrics['forecast_time_step_count']:
+                trainer.strategy.remove_checkpoint(self.forecast_time_step_count_and_ckpt_path[1])
+            self.forecast_time_step_count_and_ckpt_path = (trainer.callback_metrics['forecast_time_step_count'], current_ckpt_filepath)

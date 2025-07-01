@@ -20,12 +20,13 @@ log = utils.getLoggerByFilename(__file__)
 
 
 class GeneratorDataset(IterableDataset):
-    def __init__(self, iterable):
+    def __init__(self, iterable, length=None):
         super().__init__()
         self.iterable = iterable
+        self.length = length
 
     def __len__(self):
-        return len(self.iterable)
+        return self.length or len(self.iterable)
 
     def __iter__(self):
         for item in self.iterable:
@@ -168,7 +169,7 @@ class TrajectoryDataset(pl.lightning.LightningDataModule):
         for split, dataloader in dataloaders.items():
             limit = split_limits[split]
             if limit is not None:
-                dataloaders[split] = DataLoader(GeneratorDataset([batch for _, batch in zip(range(limit), dataloader)]), collate_fn=lambda x: x[0])
+                dataloaders[split] = DataLoader(GeneratorDataset((batch for _, batch in zip(range(limit), dataloader)), length=limit), collate_fn=lambda x: x[0])
 
         self.assert_dataloader_order(dataloaders)
 
