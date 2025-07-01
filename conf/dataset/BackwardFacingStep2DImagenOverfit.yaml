@@ -1,0 +1,9 @@
+defaults:
+  - BackwardFacingStep2DImagen
+  - _self_
+
+dataloader_shuffle_train: false
+
+macro_time_step_count_train: 20
+macro_time_step_count_val: 10
+macro_time_step_count_test: 10

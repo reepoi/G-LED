@@ -1,0 +1,9 @@
+defaults:
+  - BackwardFacingStep2DTransformer
+  - _self_
+
+time_step_window_size_train: 10
+time_step_window_size_val: 10
+
+batch_size_train: 1
+batch_size_val: 1

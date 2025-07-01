@@ -11,9 +11,9 @@ trajectory_time_step_count_micro: 2498750
 
 trajectory_time_step_subsample_interval_macro: 250
 
-macro_time_step_count_train: 80
-macro_time_step_count_val: 50
-macro_time_step_count_test: 14  #96
+macro_time_step_count_train: 8000
+macro_time_step_count_val: 1500
+macro_time_step_count_test: 1496
 
 time_step_window_size_train: 41
 time_step_window_size_val: 450
