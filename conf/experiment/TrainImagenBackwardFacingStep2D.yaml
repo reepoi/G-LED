@@ -1,0 +1,18 @@
+# @package _global_
+
+defaults:
+  - override /model: ImagenBackwardFacingStep2D
+  - override /dataset: BackwardFacingStep2D
+
+model:
+  epoch_count: 20
+  learning_rate: 0.
+  learning_rate_decay: 0.
+dataset:
+  time_step_window_size_train: 10
+  time_step_window_size_val: 10
+
+  batch_size_train: 1
+  batch_size_val: 1
+
+  pred_forecast_time_step_count: 0

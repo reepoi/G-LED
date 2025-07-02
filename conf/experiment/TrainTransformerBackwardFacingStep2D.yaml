@@ -1,0 +1,18 @@
+# @package _global_
+
+defaults:
+  - override /model: Transformer
+  - override /dataset: BackwardFacingStep2D
+
+model:
+  time_step_window_size: 40
+  initial_sequence_time_step_count: 1
+  march_tolerance: .1
+dataset:
+  time_step_window_size_train: 41
+  time_step_window_size_val: 450
+
+  batch_size_train: 16
+  batch_size_val: 16
+
+  pred_forecast_time_step_count: 0

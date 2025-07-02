@@ -47,27 +47,21 @@ class Conf(orm.Table):
     def run_dir(self):
         return Path(self.out_dir)/self.run_subdir/self.alt_id
 
+    def get_model(self):
+        if isinstance(self.model, Trained):
+            return self.model.conf.model
+        else:
+            return self.model
+
 
 sa.event.listens_for(Conf, 'before_insert')(
     hydra_orm.utils.set_attr_to_func_value(Conf, Conf.alt_id.key, hydra_orm.utils.generate_random_string)
 )
 
 
-class Trained(conf.model.Trainable):
+class Trained(conf.model.Model):
     conf = orm.OneToManyField(Conf, default=omegaconf.MISSING, enforce_element_type=False)
     ckpt_filename: str = orm.make_field(orm.ColumnRequired(sa.String(len('epoch_####.ckpt'))), default='last.ckpt')
-
-    # def __getattr__(self, attr):
-    #     if attr != 'conf':
-    #         breakpoint()
-    #         if hasattr(self.conf.model, attr):
-    #             return getattr(self.conf.model, attr)
-    #         else:
-    #             raise AttributeError(
-    #                 f"Neither '{self.__class__.__name__}' nor '{self.conf.model.__class__.__name__}' objects have attribute '{attr}'"
-    #             )
-    #     else:
-    #         return super().__getattr(attr)
 
     @staticmethod
     def transform_conf(session, conf_alt_id):

@@ -2,6 +2,7 @@ from dataclasses import field
 from typing import List, Any, Optional
 from pathlib import Path
 
+import omegaconf
 from omegaconf import II
 import hydra_orm.utils
 from hydra_orm import orm
@@ -12,22 +13,22 @@ class Dataset(orm.InheritableTable):
     defaults: List[Any] = hydra_orm.utils.make_defaults_list([
         '_self_',
     ])
-    _data_dir: str = field(default=str(Path('/mnta/taosData/diffusion-dynamics/G-LED/data').resolve()))
+    _data_dir: str = field(default=str(Path('/home/ttransue/out/g_led/data').resolve()))
 
     rng_seed: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=II('oc.select:..rng_seed,0'))
     _processed_filename: str = orm.make_field(orm.ColumnRequired(sa.String(8), index=True), init=False, omegaconf_ignore=True)
 
-    trajectory_count_train: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=0)
-    trajectory_count_val: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=0)
+    trajectory_count_train: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=omegaconf.MISSING)
+    trajectory_count_val: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=omegaconf.MISSING)
     trajectory_count_test: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=II('.trajectory_count_val'))
     trajectories_are_shared_across_splits: bool = orm.make_field(orm.ColumnRequired(sa.Boolean), default=False)
 
-    trajectory_time_step_size_micro: float = orm.make_field(orm.ColumnRequired(sa.Double), default=0.)
+    trajectory_time_step_size_micro: float = orm.make_field(orm.ColumnRequired(sa.Double), default=omegaconf.MISSING)
     # excluding the initial condition
-    trajectory_time_step_count_micro: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=0)
-    trajectory_time_step_count_drop_first_micro: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=0)
+    trajectory_time_step_count_micro: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=omegaconf.MISSING)
+    trajectory_time_step_count_drop_first_micro: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=omegaconf.MISSING)
 
-    trajectory_time_step_subsample_interval_macro: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=0)
+    trajectory_time_step_subsample_interval_macro: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=omegaconf.MISSING)
 
     # None implies use entire trajectory
     macro_time_step_count_train: Optional[int] = orm.make_field(sa.Column(sa.Integer), default=None)
@@ -39,8 +40,8 @@ class Dataset(orm.InheritableTable):
     time_step_window_size_val: Optional[int] = orm.make_field(sa.Column(sa.Integer), default=None)
     time_step_window_size_test: Optional[int] = orm.make_field(sa.Column(sa.Integer), default=II('.time_step_window_size_val'))
 
-    batch_size_train: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=0)
-    batch_size_val: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=0)
+    batch_size_train: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=omegaconf.MISSING)
+    batch_size_val: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=omegaconf.MISSING)
     batch_size_test: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=II('.batch_size_val'))
 
     dataloader_shuffle_train: bool = orm.make_field(orm.ColumnRequired(sa.Boolean), default=True)
@@ -50,6 +51,8 @@ class Dataset(orm.InheritableTable):
 
     dataloader_val_split_limits_val_on_train: Optional[int] = orm.make_field(sa.Column(sa.Integer), default=5)
     dataloader_val_split_limits_val: Optional[int] = orm.make_field(sa.Column(sa.Integer), default=2)
+
+    pred_forecast_time_step_count: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=omegaconf.MISSING)
 
     def __post_init__(self):
         if self.trajectories_are_shared_across_splits:
