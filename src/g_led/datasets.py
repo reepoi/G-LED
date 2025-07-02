@@ -307,10 +307,11 @@ class BackwardFacingStep2D(TrajectoryDataset):
         if (self.cfg.data_dir/self.cfg.processed_filename).exists():
             return
         if (self.cfg.data_dir/'data_cat_f32.pt').exists():
-            torch.save(
-                torch.load(self.cfg.data_dir/'data_cat_f32.pt')[None],
-                self.cfg.data_dir/self.cfg.processed_filename
-            )
+            (self.cfg.data_dir/self.cfg.processed_filename).symlink_to(self.cfg.data_dir/'data_cat_f32.pt')
+            # torch.save(
+            #     torch.load(self.cfg.data_dir/'data_cat_f32.pt')[None],
+            #     self.cfg.data_dir/self.cfg.processed_filename
+            # )
             return
 
         trajectories0 = np.load(self.cfg.data_dir/'data0.npy', allow_pickle=True)
@@ -387,7 +388,7 @@ def main(cfg):
         with pl.utilities.seed.isolate_rng():
             dataset = get_dataset(cfg.dataset)
             dataset.prepare_data()
-        dataset.setup('fit')
+        dataset.setup('predict')
         print('end')
 
 
