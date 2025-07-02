@@ -97,6 +97,7 @@ class LogStatsSequential(pl.callbacks.Callback):
             self.ckpt_monitor = current_ckpt_monitor_value
             current_ckpt_filepath = pl_module.cfg.run_dir/f"epoch_{trainer.current_epoch}__forecast_time_step_count_{trainer.callback_metrics['forecast_time_step_count']:.0f}.ckpt"
             trainer.save_checkpoint(current_ckpt_filepath)
-            if self.forecast_time_step_count_and_ckpt_path is not None and self.forecast_time_step_count_and_ckpt_path[0] == trainer.callback_metrics['forecast_time_step_count']:
+            # if self.forecast_time_step_count_and_ckpt_path is not None and self.forecast_time_step_count_and_ckpt_path[0] == trainer.callback_metrics['forecast_time_step_count']:
+            if self.forecast_time_step_count_and_ckpt_path is not None:
                 trainer.strategy.remove_checkpoint(self.forecast_time_step_count_and_ckpt_path[1])
             self.forecast_time_step_count_and_ckpt_path = (trainer.callback_metrics['forecast_time_step_count'], current_ckpt_filepath)
