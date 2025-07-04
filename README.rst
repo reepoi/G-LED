@@ -1,7 +1,7 @@
 Generative Learning for Forecasting the Dynamics of High Dimensional Complex Systems
 ====================================================================================
 
-Unofficial code to attempting to replicate the results of [gaoGenerativeLearningForecasting2024]_.
+Unofficial code attempting to replicate the results of [gaoGenerativeLearningForecasting2024]_.
 
 .. note::
 
