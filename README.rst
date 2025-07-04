@@ -11,7 +11,7 @@ Unofficial code attempting to replicate the results of [gaoGenerativeLearningFor
 Installation
 ============
 
-#. Clone this repository, and then clone our fork of Imagen - Pytorch into a directory **next to where the directory where you cloned this repository.**
+#. Clone this repository, and then clone our fork of Imagen - Pytorch into a directory **next to the directory where you cloned this repository.**
 
    .. code:: bash
 
