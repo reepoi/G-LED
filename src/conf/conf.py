@@ -90,9 +90,6 @@ class Split(str, enum.Enum):
 
 
 class Macro(conf.dataset.Dataset):
-    __mapper_args__ = dict(
-        inherit_condition=sa.column('Macro.id') == conf.dataset.Dataset.id,
-    )
     defaults: List[Any] = hydra_orm.utils.make_defaults_list([
         {'/dataset': omegaconf.MISSING},
         {'/model': omegaconf.MISSING},
