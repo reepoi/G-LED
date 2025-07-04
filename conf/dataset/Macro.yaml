@@ -1,0 +1,13 @@
+defaults:
+  - _Macro
+  - _self_
+
+trajectory_count_train: ${.dataset.trajectory_count_train}
+trajectory_count_val: ${.dataset.trajectory_count_val}
+trajectories_are_shared_across_splits: ${.dataset.trajectories_are_shared_across_splits}
+
+trajectory_time_step_size_micro: ${.dataset.trajectory_time_step_size_micro}
+trajectory_time_step_count_micro: ${.dataset.trajectory_time_step_count_micro}
+trajectory_time_step_count_drop_first_micro: ${.dataset.trajectory_time_step_count_drop_first_micro}
+
+trajectory_time_step_subsample_interval_macro: ${.dataset.trajectory_time_step_subsample_interval_macro}

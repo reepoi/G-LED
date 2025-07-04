@@ -40,6 +40,10 @@ class Dataset(orm.InheritableTable):
     time_step_window_size_val: Optional[int] = orm.make_field(sa.Column(sa.Integer), default=None)
     time_step_window_size_test: Optional[int] = orm.make_field(sa.Column(sa.Integer), default=II('.time_step_window_size_val'))
 
+    time_step_window_stride_train: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=1)
+    time_step_window_stride_val: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=1)
+    time_step_window_stride_test: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=II('.time_step_window_stride_val'))
+
     batch_size_train: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=omegaconf.MISSING)
     batch_size_val: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=omegaconf.MISSING)
     batch_size_test: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=II('.batch_size_val'))
@@ -51,8 +55,6 @@ class Dataset(orm.InheritableTable):
 
     dataloader_val_split_limits_val_on_train: Optional[int] = orm.make_field(sa.Column(sa.Integer), default=5)
     dataloader_val_split_limits_val: Optional[int] = orm.make_field(sa.Column(sa.Integer), default=2)
-
-    pred_forecast_time_step_count: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=omegaconf.MISSING)
 
     def __post_init__(self):
         if self.trajectories_are_shared_across_splits:

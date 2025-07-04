@@ -19,120 +19,6 @@ from g_led.transformer.sequentialModel import SequentialModel as Transformer
 log = utils.getLoggerByFilename(__file__)
 
 
-class TrainSequential(pl.LightningModule):
-    def __init__(self, cfg, downsampler, model):
-        super().__init__()
-        self.automatic_optimization = False
-
-        self.cfg = cfg
-        self.downsampler = downsampler
-        self.model = model
-        self.forecast_time_step_count = 1
-
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.cfg.get_model().learning_rate)
-        return dict(
-            optimizer=optimizer,
-            lr_scheduler=dict(
-                scheduler=torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=self.cfg.get_model().learning_rate_decay)
-            ),
-        )
-
-    def setup(self, stage):
-        pass
-
-    def forecast(self, forecast_time_step_count, initial_sequence, flatten_solution=False):
-        # process warm-up sequence of length 1 or more
-        if (time_step_count := initial_sequence.shape[1]) > self.cfg.get_model().time_step_window_size:
-            raise ValueError(
-                f'The time step count of the initial sequence ({time_step_count}) must be less than or equal to model.time_step_window_size ({self.cfg.get_model().time_step_window_size}).'
-                f' Please pass a initial sequence with at most {self.cfg.get_model().time_step_window_size} time steps, or set model.time_step_window_size={time_step_count} or larger.'
-            )
-        window_shifted_by_1_pred, cached_keys_values, *_ = self.model(inputs_embeds=initial_sequence, past=None)
-        window_pred_batch = [
-            initial_sequence[:, :1],  # save the initial state
-            window_shifted_by_1_pred,
-        ]
-        window_pred = window_shifted_by_1_pred[:, -1:]  # iterate the latest state
-        for time_step in range(forecast_time_step_count - 1):  # minus 1 because we already forecasted one time step past the warm-up sequence
-            if cached_keys_values[0][0].shape[2] < self.cfg.get_model().time_step_window_size:
-                # cached_keys_values[*][0].shape[2] is the number of time steps processed in the trajectory (i.e., in the context of LLMs, the number of tokens in the context)
-                window_shifted_by_1_pred, cached_keys_values, *_ = self.model(inputs_embeds=window_pred, past=cached_keys_values)
-            else:
-                # drop oldest key/value to maintain fixed context window
-                cached_keys_values = [
-                    [
-                        # keys
-                        cached_keys_values[layer][0][:, :, 1:],
-                        # values
-                        cached_keys_values[layer][1][:, :, 1:]
-                    ]
-                    for layer in range(self.cfg.get_model().attention_layer_count)
-                ]
-                window_shifted_by_1_pred, cached_keys_values, *_ = self.model(inputs_embeds=window_pred, past=cached_keys_values)
-            window_pred = window_shifted_by_1_pred
-            window_pred_batch.append(window_pred)
-        window_pred_batch = torch.cat(window_pred_batch, dim=1)
-        batch_size, time_count = window_pred_batch.shape[:2]
-
-        window_pred_batch = window_pred_batch.view(batch_size, time_count, self.cfg.dataset.solution_dimension, *self.cfg.dataset.coarse_dimensions())
-        if flatten_solution:
-            window_pred_batch = window_pred_batch.view(batch_size, time_count, self.cfg.dataset.solution_dimension * self.cfg.dataset.embedding_dimension)
-
-        return window_pred_batch
-
-    def training_step(self, batch, batch_idx):
-        optimizer = self.optimizers()
-        optimizer.zero_grad()
-
-        coarse_batch = self.downsampler(batch, flatten_solution=True)
-        window = coarse_batch[:, :self.cfg.get_model().time_step_window_size, :]
-        window_shifted_by_1_pred, *_ = self.model(inputs_embeds=window, past=None)
-        window_shifted_by_1 = coarse_batch[:, 1:self.cfg.get_model().time_step_window_size+1, :]
-
-        loss = F.mse_loss(window_shifted_by_1_pred, window_shifted_by_1)
-
-        self.manual_backward(loss)
-        optimizer.step()
-
-        return dict(loss=loss)
-
-    def validation_step(self, batch, _):
-        batch, batch_idx, dataset_idx = batch
-        coarse_batch = self.downsampler(batch, flatten_solution=True)
-        initial_condition = coarse_batch[:, :self.cfg.get_model().initial_sequence_time_step_count]
-        coarse_batch = coarse_batch[:, self.cfg.get_model().initial_sequence_time_step_count:self.cfg.get_model().initial_sequence_time_step_count+self.forecast_time_step_count]
-        window_pred_batch = self.forecast(self.forecast_time_step_count, initial_condition, flatten_solution=True)[:, self.cfg.get_model().initial_sequence_time_step_count:]
-
-        # local_batch_size = windows_pred.shape[0]
-        relative_rmse_batch = reduce(
-            (window_pred_batch - coarse_batch).square(),
-            'batch time_step dim -> batch time_step',
-            'mean'
-        ).sqrt().mean(1) / reduce(coarse_batch.square(), 'batch time_step dim -> batch time_step', 'mean').sqrt().mean(1)
-
-        return dict(
-            relative_rmse_max=relative_rmse_batch.max(),
-            relative_rmse_min=relative_rmse_batch.min(),
-            relative_rmse_mean=relative_rmse_batch.mean(),
-            relative_rmse_std=relative_rmse_batch.std(correction=0),
-            relative_rmse_sum=relative_rmse_batch.sum(),
-        )
-
-    def predict_step(self, batch, batch_idx):
-        batch, batch_idx, dataset_idx = batch
-        coarse_batch = self.downsampler(batch, flatten_solution=True)
-        return {
-            datasets.TrajectoryDataset.dataset_idx_to_dataset_name[dataset_idx]: coarse_batch
-        }
-        initial_sequence_time_step_count = self.cfg.get_model().initial_sequence_time_step_count
-        initial_condition = coarse_batch[:, :initial_sequence_time_step_count]
-        window_pred_batch = self.forecast(self.cfg.dataset.pred_forecast_time_step_count, initial_condition)
-        return {
-            datasets.TrajectoryDataset.dataset_idx_to_dataset_name[dataset_idx]: window_pred_batch
-        }
-
-
 @hydra.main(**utils.HYDRA_INIT)
 def main(cfg):
     engine = conf.get_engine()
@@ -151,9 +37,7 @@ def main(cfg):
         dataset = datasets.get_dataset(cfg.dataset)
         dataset.prepare_data()
     with pl.utilities.seed.isolate_rng():
-        model, ckpt_path = models.get_model(cfg)
-
-    train_sequential = TrainSequential(cfg, datasets.Downsampler(cfg.dataset), model)
+        model = models.get_model(cfg)
 
     logger = loggers.CSVLogger(cfg.run_dir, name=None)
 
@@ -201,17 +85,17 @@ def main(cfg):
                 )
             )
         )
-        trainer.fit(train_sequential, datamodule=dataset, ckpt_path=ckpt_path)
-    if cfg.predict:
-        prediction_batches = trainer.predict(train_sequential, datamodule=dataset, ckpt_path=ckpt_path)
-        predictions = defaultdict(list)
-        for batch in prediction_batches:
-            for k, v in batch.items():
-                predictions[k].append(v)
-        for k, v in list(predictions.items()):
-            v = torch.cat(v).cpu()
-            torch.save(v, cfg.run_dir/f'pred_{k}.pt')
-            del predictions[k]
+        trainer.fit(model, datamodule=dataset)
+    # if cfg.predict:
+    #     prediction_batches = trainer.predict(model, datamodule=dataset)
+    #     predictions = defaultdict(list)
+    #     for batch in prediction_batches:
+    #         for k, v in batch.items():
+    #             predictions[k].append(v)
+    #     for k, v in list(predictions.items()):
+    #         v = torch.cat(v).cpu()
+    #         torch.save(v, cfg.run_dir/f'pred_{k}.pt')
+    #         del predictions[k]
 
 
 if __name__ == '__main__':

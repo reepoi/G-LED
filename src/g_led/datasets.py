@@ -13,7 +13,7 @@ from einops import rearrange, EinopsError
 from tqdm import tqdm
 
 from conf import conf, dataset
-from g_led import utils
+from g_led import models, utils
 
 
 log = utils.getLoggerByFilename(__file__)
@@ -34,9 +34,6 @@ class GeneratorDataset(IterableDataset):
 
 
 class TrajectoryDataset(pl.lightning.LightningDataModule):
-    dataset_idx_to_dataset_name = dict(enumerate(('train', 'val_on_train', 'val', 'test')))
-    dataset_name_to_dataset_idx = dict(map(reversed, dataset_idx_to_dataset_name.items()))
-
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
@@ -50,47 +47,50 @@ class TrajectoryDataset(pl.lightning.LightningDataModule):
     def extract_from_trajectories(self, trajectories, start, end, time_step_window_size):
         raise NotImplementedError()
 
-    def get_train_split(self, trajectories, time_step_window_size):
+    def get_train_split(self, trajectories, time_step_window_size, time_step_window_stride):
         return self.extract_from_trajectories(
             trajectories[self.cfg.trajectory_start_train:self.cfg.trajectory_end_train],
             0, self.cfg.macro_time_step_count_train,
-           time_step_window_size
+           time_step_window_size,
+           time_step_window_stride
         )
 
     def get_val_split(self, trajectories):
         return self.extract_from_trajectories(
             trajectories[self.cfg.trajectory_start_val:self.cfg.trajectory_end_val],
             self.cfg.macro_time_step_count_train, self.cfg.macro_time_step_end_val,
-            self.cfg.time_step_window_size_val
+            self.cfg.time_step_window_size_val,
+            self.cfg.time_step_window_stride_val
         )
 
     def get_test_split(self, trajectories):
         return self.extract_from_trajectories(
             trajectories[self.cfg.trajectory_start_test:self.cfg.trajectory_end_test],
             self.cfg.macro_time_step_end_val, self.cfg.macro_time_step_end_test,
-            self.cfg.time_step_window_size_test
+            self.cfg.time_step_window_size_test,
+            self.cfg.time_step_window_stride_test,
         )
 
     def setup(self, stage):
         trajectories = self.load_trajectories()
         self.validate_trajectories(trajectories)
         if stage == 'fit':
-            self.train = self.get_train_split(trajectories, self.cfg.time_step_window_size_train)
-            self.val_on_train = self.get_train_split(trajectories, self.cfg.time_step_window_size_val)
+            self.train = self.get_train_split(trajectories, self.cfg.time_step_window_size_train, self.cfg.time_step_window_stride_train)
+            self.val_on_train = self.get_train_split(trajectories, self.cfg.time_step_window_size_val, self.cfg.time_step_window_stride_val)
             self.val = self.get_val_split(trajectories)
             self.validate_splits(['train', 'val_on_train', 'val'])
         elif stage == 'validate':
-            self.val_on_train = self.get_train_split(trajectories, self.cfg.time_step_window_size_val)
+            self.val_on_train = self.get_train_split(trajectories, self.cfg.time_step_window_size_val, self.cfg.time_step_window_stride_val)
             self.val = self.get_val_split(trajectories)
             self.validate_splits(['val_on_train', 'val'])
         elif stage == 'test':
             self.test = self.get_test_split(trajectories)
         elif stage == 'predict':
-            self.train = self.get_train_split(trajectories, self.cfg.time_step_window_size_train)
-            self.val_on_train = self.get_train_split(trajectories, self.cfg.time_step_window_size_val)
+            self.train = self.get_train_split(trajectories, self.cfg.time_step_window_size_train, self.cfg.time_step_window_stride_train)
+            self.val_on_train = self.get_train_split(trajectories, self.cfg.time_step_window_size_val, self.cfg.time_step_window_stride_val)
             self.val = self.get_val_split(trajectories)
             self.test = self.get_test_split(trajectories)
-            self.validate_splits([*self.dataset_name_to_dataset_idx.keys()])
+            self.validate_splits(['train', 'val_on_train', 'val', 'test'])
         else:
             raise ValueError(f'Unknown stage: {stage}')
 
@@ -121,13 +121,14 @@ class TrajectoryDataset(pl.lightning.LightningDataModule):
         axis_names = f"trajectory time component {' '.join(space_dims)}"
         split_to_cfg_field_trajectory_count = dict(train='train', val_on_train='train', val='val', test='test')
         split_to_cfg_field_time_step_window_size = dict(train='train', val_on_train='val', val='val', test='test')
+        split_to_cfg_field_time_step_window_stride = dict(train='train', val_on_train='val', val='val', test='test')
         has_validation_error = False
         for split in splits:
             trajectory_count = getattr(self.cfg, f'trajectory_count_{split_to_cfg_field_trajectory_count[split]}')
             trajectory_time_step_count_macro = getattr(self.cfg, f'macro_time_step_count_{split_to_cfg_field_trajectory_count[split]}') or self.cfg.trajectory_time_step_count_macro
             if (time_step_window_size := getattr(self.cfg, f'time_step_window_size_{split_to_cfg_field_time_step_window_size[split]}')) is not None:
-                # assuming window stride of 1
-                trajectory_count *= trajectory_time_step_count_macro - time_step_window_size + 1
+                time_step_window_stride = getattr(self.cfg, f'time_step_window_stride_{split_to_cfg_field_time_step_window_stride[split]}')
+                trajectory_count *= (trajectory_time_step_count_macro - time_step_window_size) / time_step_window_stride + 1
                 trajectory_time_step_count_macro = time_step_window_size
             try:
                 rearrange(
@@ -149,7 +150,7 @@ class TrajectoryDataset(pl.lightning.LightningDataModule):
 
     @classmethod
     def assert_dataloader_order(cls, dataloaders):
-        dataset_idxs = [cls.dataset_name_to_dataset_idx[k] for k in dataloaders.keys()]
+        dataset_idxs = [utils.dataset_name_to_dataset_idx[k] for k in dataloaders.keys()]
         assert all(b - a == 1 for a, b in zip(dataset_idxs, dataset_idxs[1:]))
 
     def train_dataloader(self, shuffle=None):
@@ -238,13 +239,13 @@ class KuramotoSivashinksy1D(TrajectoryDataset):
     def load_trajectories(self):
         return torch.load(self.cfg.data_dir/self.cfg.processed_filename)
 
-    def extract_from_trajectories(self, trajectories, start, end, time_step_window_size):
+    def extract_from_trajectories(self, trajectories, start, end, time_step_window_size, time_step_window_stride):
         trajectories = trajectories[:, start:end]
         if time_step_window_size is None:
             time_step_window_size = trajectories.shape[1]
         return rearrange(
             trajectories
-            .unfold(1, time_step_window_size, 1),
+            .unfold(1, time_step_window_size, time_step_window_stride),
             'trajectory trajectory_window component space time -> (trajectory trajectory_window) time component space'
         )
 
@@ -323,46 +324,57 @@ class BackwardFacingStep2D(TrajectoryDataset):
     def load_trajectories(self):
         return torch.load(self.cfg.data_dir/self.cfg.processed_filename)
 
-    def extract_from_trajectories(self, trajectories, start, end, time_step_window_size):
-        trajectories = trajectories[:, self.cfg.trajectory_time_step_count_drop_first_micro:][:, start:end]
+    def extract_from_trajectories(self, trajectories, start, end, time_step_window_size, time_step_window_stride):
+        trajectories = trajectories[:, start:end]
         if time_step_window_size is None:
             time_step_window_size = trajectories.shape[1]
         return rearrange(
             trajectories
-            .unfold(1, time_step_window_size, 1),
+            .unfold(1, time_step_window_size, time_step_window_stride),
             'trajectory trajectory_window component width length time -> (trajectory trajectory_window) time component width length'
         )
 
 
-class Downsampler(nn.Module):
-    def __init__(self, cfg):
-        super().__init__()
-        self.cfg = cfg
-        self.downsampler = nn.Upsample(size=cfg.coarse_dimensions(), mode=cfg.upsample_mode)
+class Macro(TrajectoryDataset):
+    def __init__(self, cfg, dataset, downsampler, model):
+        super().__init__(cfg)
+        self.dataset = dataset
+        self.downsampler = downsampler
+        self.model = model
+        self._trajectories = []
+        dataloader = dataset.predict_dataloader(combined=False)[cfg.split]
+        for batch in dataloader:
+            if model is None:
+                initial_sequence = downsampler(
+                    batch[:, cfg.initial_sequence_time_step_start:cfg.initial_sequence_time_step_count+cfg.forecast_time_step_count]
+                )
+                batch_macro = initial_sequence
+            elif isinstance(model, models.TrainSequential):
+                initial_sequence = downsampler(
+                    batch[:, cfg.initial_sequence_time_step_start:cfg.initial_sequence_time_step_count],
+                    flatten_solution=True,
+                )
+                batch_macro = model.forecast(cfg.forecast_time_step_count, initial_sequence)
+            else:
+                raise NotImplementedError(f"Prediction in the Macro dataset not implemented implemented for '{model.__class__}'")
+            self._trajectories.append(batch_macro)
+        self._trajectories = torch.cat(self._trajectories)
 
-    def forward(self, batch, flatten_solution=False):
-        batch_size, time_count = batch.shape[:2]
-        batch_macro = self.downsampler(
-            batch.view(-1, self.cfg.solution_dimension, *self.cfg.dimensions())
-        ).view(batch_size, time_count, self.cfg.solution_dimension, *self.cfg.coarse_dimensions())
-        if flatten_solution:
-            batch_macro = batch_macro.view(batch_size, time_count, self.cfg.solution_dimension * self.cfg.embedding_dimension)
-        return batch_macro
+    def prepare_data(self):
+        pass
 
+    def load_trajectories(self):
+        return self._trajectories
 
-class Upsampler(nn.Module):
-    def __init__(self, cfg):
-        super().__init__()
-        self.cfg = cfg
-        self.upsampler = nn.Upsample(size=cfg.dimensions(), mode=cfg.upsample_mode)
-
-    def forward(self, batch):
-        batch_size, time_count = batch.shape[:2]
-        batch_micro = self.upsampler(
-            batch.view(-1, self.cfg.solution_dimension, *self.cfg.coarse_dimensions())
-        ).view(batch_size, time_count, self.cfg.solution_dimension, *self.cfg.dimensions())
-        return batch_micro
-
+    def extract_from_trajectories(self, trajectories, start, end, time_step_window_size, time_step_window_stride):
+        trajectories = trajectories[:, start:end]
+        if time_step_window_size is None:
+            time_step_window_size = trajectories.shape[1]
+        return rearrange(
+            trajectories
+            .unfold(1, time_step_window_size, time_step_window_stride),
+            'trajectory trajectory_window component width length time -> (trajectory trajectory_window) time component width length'
+        )
 
 
 def get_dataset(cfg):
@@ -372,6 +384,17 @@ def get_dataset(cfg):
         return BackwardFacingStep2D(cfg)
     elif isinstance(cfg, dataset.ChannelFlow3D):
         raise NotImplementedError()
+    elif isinstance(cfg, conf.Macro):
+        with pl.utilities.seed.isolate_rng():
+            if cfg.model is None:
+                model = None
+            else:
+                model = models.get_model(cfg)
+        with pl.utilities.seed.isolate_rng():
+            ds = get_dataset(cfg.dataset)
+            ds.prepare_data()
+            ds.setup('predict')
+        return Macro(cfg, ds, models.Downsampler(cfg.dataset), model)
     else:
         raise ValueError(f'Unknown dataset: {cfg}')
 
@@ -382,13 +405,13 @@ def main(cfg):
     conf.orm.create_all(engine)
     with conf.sa.orm.Session(engine) as db:
         cfg = conf.orm.instantiate_and_insert_config(db, OmegaConf.to_container(cfg, resolve=True))
-        db.commit()
+        # db.commit()
         pprint.pp(cfg)
         pl.seed_everything(cfg.rng_seed)
         with pl.utilities.seed.isolate_rng():
-            dataset = get_dataset(cfg.dataset)
-            dataset.prepare_data()
-        dataset.setup('predict')
+            ds = get_dataset(cfg.dataset)
+            ds.prepare_data()
+        ds.setup('predict')
         print('end')
 
 

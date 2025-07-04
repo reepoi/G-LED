@@ -2,6 +2,3 @@
 
 defaults:
   - EvalTrainedTransformerBackwardFacingStep2D
-
-dataset:
-  pred_forecast_time_step_count: 150

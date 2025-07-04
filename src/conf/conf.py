@@ -1,4 +1,5 @@
 from dataclasses import field
+import enum
 from pathlib import Path
 from typing import Any, List
 
@@ -37,11 +38,14 @@ class Conf(orm.Table):
     model = orm.OneToManyField(conf.model.Model, required=True, default=omegaconf.MISSING)
 
     def __post_init__(self):
-        if isinstance(self.model, conf.model.Transformer) and self.dataset.time_step_window_size_train is not None and self.model.time_step_window_size >= self.dataset.time_step_window_size_train:
-            raise ValueError(
-                'model.time_step_window_size must be at least one less than the dataset.time_step_window_size_train so that the model can attempt to predict at least one time step,'
-                f' but model.time_step_window_size={self.model.time_step_window_size} >= dataset.time_step_window_size_train={self.dataset.time_step_window_size_train}.'
-            )
+        if isinstance(self.model, conf.model.Transformer):
+            if self.predict:
+                raise ValueError('Do not predict with the Transformer. Use dataset=Macro. TODO: write a better error message.')
+            if self.dataset.time_step_window_size_train is not None and self.model.time_step_window_size >= self.dataset.time_step_window_size_train:
+                raise ValueError(
+                    'model.time_step_window_size must be at least one less than the dataset.time_step_window_size_train so that the model can attempt to predict at least one time step,'
+                    f' but model.time_step_window_size={self.model.time_step_window_size} >= dataset.time_step_window_size_train={self.dataset.time_step_window_size_train}.'
+                )
 
     @property
     def run_dir(self):
@@ -78,9 +82,58 @@ class Trained(conf.model.Model):
         return conf
 
 
+class Split(str, enum.Enum):
+    TRAIN = 'train'
+    VAL_ON_TRAIN = 'val_on_train'
+    VAL = 'val'
+    TEST = 'test'
+
+
+class Macro(conf.dataset.Dataset):
+    __mapper_args__ = dict(
+        inherit_condition=sa.column('Macro.id') == conf.dataset.Dataset.id,
+    )
+    defaults: List[Any] = hydra_orm.utils.make_defaults_list([
+        {'/dataset': omegaconf.MISSING},
+        {'/model': omegaconf.MISSING},
+        '_self_',
+    ])
+    dataset = orm.OneToManyField(conf.dataset.Dataset, default=omegaconf.MISSING)
+    split: Split = orm.make_field(orm.ColumnRequired(sa.Enum(Split)), default=omegaconf.MISSING)
+    initial_sequence_time_step_start: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=omegaconf.MISSING)
+    initial_sequence_time_step_count: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=omegaconf.MISSING)
+    forecast_time_step_count: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=omegaconf.MISSING)
+
+    model = orm.OneToManyField(Trained, required=False, default=omegaconf.MISSING)
+
+    @property
+    def trajectory_time_step_count_macro(self):
+        # add one for initial condition
+        return self.forecast_time_step_count + 1
+
+    @property
+    def solution_dimension(self):
+        return self.dataset.solution_dimension
+
+    def dimensions(self):
+        return self.dataset.coarse_dimensions()
+
+    def coarse_dimensions(self):
+        return self.dataset.coarse_dimensions()
+
+    @property
+    def embedding_dimension(self):
+        return self.dataset.embedding_dimension
+
+    @property
+    def upsample_mode(self):
+        return self.dataset.upsample_mode
+
+
 orm.store_config(Conf)
 orm.store_config(conf.dataset.KuramotoSivashinsky1D, group=Conf.dataset.key, name=f'_{conf.dataset.KuramotoSivashinsky1D.__name__}')
 orm.store_config(conf.dataset.BackwardFacingStep2D, group=Conf.dataset.key, name=f'_{conf.dataset.BackwardFacingStep2D.__name__}')
 orm.store_config(conf.model.Transformer, group=Conf.model.key, name=f'_{conf.model.Transformer.__name__}')
 orm.store_config(conf.model.Imagen, group=Conf.model.key, name=f'_{conf.model.Imagen.__name__}')
 orm.store_config(Trained, group=Conf.model.key)
+orm.store_config(Macro, group=Conf.dataset.key, name=f'_{Macro.__name__}')

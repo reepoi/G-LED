@@ -14,5 +14,3 @@ dataset:
 
   batch_size_train: 16
   batch_size_val: 16
-
-  pred_forecast_time_step_count: 0

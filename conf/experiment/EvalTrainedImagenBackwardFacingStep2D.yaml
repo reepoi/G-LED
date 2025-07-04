@@ -1,0 +1,23 @@
+# @package _global_
+
+defaults:
+  - EvalTrained
+  - override /dataset: Macro
+  - override /dataset@dataset.dataset: BackwardFacingStep2D
+  - _self_
+
+dataset:
+  time_step_window_size_train: 10
+  time_step_window_size_val: 10
+
+  time_step_window_stride_train: ${.time_step_window_size_train}
+  time_step_window_stride_val: ${.time_step_window_size_val}
+
+  batch_size_train: 1
+  batch_size_val: 1
+
+  forecast_time_step_count: 150
+
+  dataset:
+    batch_size_train: 16
+    batch_size_val: 16

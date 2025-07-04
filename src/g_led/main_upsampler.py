@@ -14,60 +14,6 @@ from g_led import callbacks, datasets, models, loggers, utils
 log = utils.getLoggerByFilename(__file__)
 
 
-class TrainUpsampler(pl.LightningModule):
-    def __init__(self, cfg, downsampler, upsampler, imagen_trainer):
-        super().__init__()
-        self.automatic_optimization = False
-        self.strict_loading = False
-
-        self.cfg = cfg
-        self.downsampler = downsampler
-        self.upsampler = upsampler
-        self.imagen_trainer = imagen_trainer
-
-    def configure_optimizers(self):
-        return None
-
-    def setup(self, stage):
-        pass
-
-    def upsample(self, batch_macro):
-        if isinstance(self.cfg.model, conf.Trained):
-            time_step_window_size = self.cfg.model.conf.model.time_step_window_size
-        else:
-            time_step_window_size = self.cfg.model.time_step_window_size
-        batch_macro_interpolated_to_micro = self.upsampler(batch_macro)
-        batch_micro = self.imagen_trainer.sample(
-            video_frames=time_step_window_size,
-            cond_images=batch_macro_interpolated_to_micro.transpose(1, 2)
-        ).transpose(1, 2)
-        return batch_micro
-
-    def training_step(self, batch, batch_idx):
-        self.optimizers().step()  # increment global step for logging and checkpointing
-
-        batch_macro_interpolated_to_micro = self.upsampler(self.downsampler(batch))
-        loss = self.imagen_trainer(
-            batch.transpose(1, 2),
-            cond_images=batch_macro_interpolated_to_micro.transpose(1, 2),
-            unet_number=1,
-            ignore_time=False
-        )
-        self.imagen_trainer.update(unet_number=1)
-
-        return dict(loss=torch.tensor(loss))
-
-    def validation_step(self, batch, batch_idx):
-        pass
-
-    def predict_step(self, batch, batch_idx):
-        batch, batch_idx, dataset_idx = batch
-        batch_macro = self.upsample(self.downsampler(batch))
-        return {
-            datasets.TrajectoryDataset.dataset_idx_to_dataset_name[dataset_idx]: batch_macro
-        }
-
-
 @hydra.main(**utils.HYDRA_INIT)
 def main(cfg):
     engine = conf.get_engine()
@@ -84,11 +30,7 @@ def main(cfg):
         dataset = datasets.get_dataset(cfg.dataset)
         dataset.prepare_data()
     with pl.utilities.seed.isolate_rng():
-        imagen_trainer, ckpt_path = models.get_model(cfg)
-
-    downsampler = datasets.Downsampler(cfg.dataset)
-    upsampler = datasets.Upsampler(cfg.dataset)
-    train_upsampler = TrainUpsampler(cfg, downsampler, upsampler, imagen_trainer)
+        model = models.get_model(cfg)
 
     logger = loggers.CSVLogger(cfg.run_dir, name=None)
 
@@ -98,9 +40,10 @@ def main(cfg):
         callbacks.ModelCheckpoint(
             dirpath=cfg.run_dir,
             filename='{epoch}',
-            save_last='link',
-            monitor='loss',
-            save_top_k=2,
+            save_last=None,
+            # monitor='loss',
+            # save_top_k=2,
+            every_n_train_steps=500,
             save_on_train_epoch_end=True,
             enable_version_counter=False,
         )
@@ -123,15 +66,10 @@ def main(cfg):
     )
 
     if cfg.fit:
-        trainer.fit(train_upsampler, datamodule=dataset, ckpt_path=ckpt_path)
+        trainer.fit(model, datamodule=dataset)
     if cfg.predict:
-        prediction_batches = trainer.predict(train_upsampler, datamodule=dataset, ckpt_path=ckpt_path)
-        predictions = defaultdict(list)
-        for batch in prediction_batches:
-            for k, v in batch.items():
-                predictions[k].append(v)
-        for k, v in predictions.items():
-            torch.save(torch.cat(v).cpu(), cfg.run_dir/f'pred_{k}.pt')
+        batches_micro = trainer.predict(model, datamodule=dataset)
+        torch.save(torch.cat(batches_micro).cpu(), cfg.run_dir/'pred.pt')
 
 
 if __name__ == '__main__':

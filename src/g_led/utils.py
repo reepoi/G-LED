@@ -18,6 +18,10 @@ DIR_ROOT = (Path(__file__).parent/'..'/'..').resolve()
 HYDRA_INIT = dict(version_base=None, config_path='../../conf', config_name='conf')
 
 
+dataset_idx_to_dataset_name = dict(enumerate(('train', 'val_on_train', 'val', 'test')))
+dataset_name_to_dataset_idx = dict(map(reversed, dataset_idx_to_dataset_name.items()))
+
+
 def filename_relative_to_dir_root(filename):
     return Path(filename).relative_to(DIR_ROOT)
 
