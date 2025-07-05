@@ -6,6 +6,7 @@ import hydra
 from omegaconf import OmegaConf
 import torch
 import lightning.pytorch as pl
+from einops import rearrange
 
 from conf import conf
 from g_led import callbacks, datasets, models, loggers, utils
@@ -69,7 +70,15 @@ def main(cfg):
         trainer.fit(model, datamodule=dataset)
     if cfg.predict:
         batches_micro = trainer.predict(model, datamodule=dataset)
-        torch.save(torch.cat(batches_micro).cpu(), cfg.run_dir/'pred.pt')
+        trajectory_count = cfg.dataset.trajectory_count
+        if cfg.dataset.trajectories_are_shared_across_splits:
+            trajectory_count //= 3  # splits are train, val, and test
+        batches_micro = rearrange(
+            torch.cat(batches_micro),
+            '(trajectory trajectory_window) time_step ... -> trajectory (trajectory_window time_step) ...',
+            trajectory=trajectory_count,
+        ).cpu()
+        torch.save(batches_micro, cfg.run_dir/'pred.pt')
 
 
 if __name__ == '__main__':

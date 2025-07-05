@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader, IterableDataset
 import hydra
 from omegaconf import OmegaConf
 import dapper.mods.KS
-from einops import rearrange, EinopsError
+from einops import rearrange, pack, EinopsError
 from tqdm import tqdm
 
 from conf import conf, dataset
@@ -341,32 +341,48 @@ class Macro(TrajectoryDataset):
         self.dataset = dataset
         self.downsampler = downsampler
         self.model = model
-        self.trajectories = []
+
         dataloader = dataset.predict_dataloader(combined=False)[cfg.split]
+        self.trajectories_micro = []
+        self.trajectories_macro = []
         for batch in dataloader:
+            batch_micro = batch[:, cfg.initial_sequence_time_step_start:cfg.initial_sequence_time_step_count+cfg.forecast_time_step_count]
+
             if model is None:
-                initial_sequence = downsampler(
-                    batch[:, cfg.initial_sequence_time_step_start:cfg.initial_sequence_time_step_count+cfg.forecast_time_step_count]
-                )
+                initial_sequence = downsampler(batch_micro)
                 batch_macro = initial_sequence
             elif isinstance(model, models.TrainSequential):
                 with torch.no_grad():
                     initial_sequence = downsampler(
-                        batch[:, cfg.initial_sequence_time_step_start:cfg.initial_sequence_time_step_count],
+                        batch_micro[:, :cfg.initial_sequence_time_step_count],
                         flatten_solution=True,
                     )
                     batch_macro = model.forecast(cfg.forecast_time_step_count, initial_sequence.to(model.device)).to(initial_sequence.device)
             else:
                 raise NotImplementedError(f"Prediction in the Macro dataset not implemented implemented for '{model.__class__}'")
-            self.trajectories.append(batch_macro)
-        self.trajectories = torch.cat(self.trajectories)
+
+            self.trajectories_micro.append(batch_micro)
+            self.trajectories_macro.append(batch_macro)
+
+        self.trajectories_micro = torch.cat(self.trajectories_micro)
+        self.trajectories_macro = torch.cat(self.trajectories_macro)
+
+        # assert self.trajectories_micro.shape[:3] == self.trajectories_macro.shape[:3]
+        try:
+            pack([self.trajectories_micro, self.trajectories_macro], 'trajectory time_step component *')
+        except EinopsError as e:
+            log.critical(
+                "Micro and macro trajectories do not have the same number of trajectories, time steps, or components. See the following einops.EinopsError for details:\n%s",
+                e,
+            )
+            raise RuntimeError('Trajectories did not pass validation. See the logs for more details.')
 
     def prepare_data(self):
         pass
 
     def load_trajectories(self):
-        # exclude the initial condition
-        return self.trajectories[:, 1:]
+        # exclude the initial sequence
+        return self.trajectories_macro[:, self.cfg.initial_sequence_time_step_count:]
 
     def extract_from_trajectories(self, trajectories, start, end, time_step_window_size, time_step_window_stride):
         trajectories = trajectories[:, start:end]
