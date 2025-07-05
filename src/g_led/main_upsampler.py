@@ -55,7 +55,7 @@ def main(cfg):
         # devices=4,
         devices=1,
         logger=logger,
-        max_epochs=cfg.model.epoch_count,
+        max_epochs=cfg.get_model().epoch_count,
         check_val_every_n_epoch=None,
         reload_dataloaders_every_n_epochs=1,
         deterministic=True,

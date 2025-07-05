@@ -105,6 +105,7 @@ class Macro(conf.dataset.Dataset):
 
     @property
     def trajectory_time_step_count_macro(self):
+        return self.forecast_time_step_count
         # add one for initial condition
         return self.forecast_time_step_count + 1
 

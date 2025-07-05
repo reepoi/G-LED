@@ -341,7 +341,7 @@ class Macro(TrajectoryDataset):
         self.dataset = dataset
         self.downsampler = downsampler
         self.model = model
-        self._trajectories = []
+        self.trajectories = []
         dataloader = dataset.predict_dataloader(combined=False)[cfg.split]
         for batch in dataloader:
             if model is None:
@@ -350,21 +350,23 @@ class Macro(TrajectoryDataset):
                 )
                 batch_macro = initial_sequence
             elif isinstance(model, models.TrainSequential):
-                initial_sequence = downsampler(
-                    batch[:, cfg.initial_sequence_time_step_start:cfg.initial_sequence_time_step_count],
-                    flatten_solution=True,
-                )
-                batch_macro = model.forecast(cfg.forecast_time_step_count, initial_sequence)
+                with torch.no_grad():
+                    initial_sequence = downsampler(
+                        batch[:, cfg.initial_sequence_time_step_start:cfg.initial_sequence_time_step_count],
+                        flatten_solution=True,
+                    )
+                    batch_macro = model.forecast(cfg.forecast_time_step_count, initial_sequence.to(model.device)).to(initial_sequence.device)
             else:
                 raise NotImplementedError(f"Prediction in the Macro dataset not implemented implemented for '{model.__class__}'")
-            self._trajectories.append(batch_macro)
-        self._trajectories = torch.cat(self._trajectories)
+            self.trajectories.append(batch_macro)
+        self.trajectories = torch.cat(self.trajectories)
 
     def prepare_data(self):
         pass
 
     def load_trajectories(self):
-        return self._trajectories
+        # exclude the initial condition
+        return self.trajectories[:, 1:]
 
     def extract_from_trajectories(self, trajectories, start, end, time_step_window_size, time_step_window_stride):
         trajectories = trajectories[:, start:end]
@@ -375,6 +377,9 @@ class Macro(TrajectoryDataset):
             .unfold(1, time_step_window_size, time_step_window_stride),
             'trajectory trajectory_window component width length time -> (trajectory trajectory_window) time component width length'
         )
+
+    def predict_dataloader(self, shuffle=None, val_split_limits=None):
+        return super().predict_dataloader(shuffle=shuffle, combined=False, val_split_limits=val_split_limits)[self.cfg.split]
 
 
 def get_dataset(cfg):

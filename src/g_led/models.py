@@ -199,9 +199,8 @@ class TrainUpsampler(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         pass
 
-    def predict_step(self, batch, batch_idx):
-        batch, batch_idx, dataset_idx = batch
-        batch_micro = self.upsample(self.downsampler(batch))
+    def predict_step(self, batch_macro, batch_idx):
+        batch_micro = self.upsample(batch_macro)
         return batch_micro
 
 
