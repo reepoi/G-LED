@@ -77,7 +77,7 @@ def main(cfg):
         log.info(
             'torchinfo:\n%s',
             torchinfo.summary(
-                model,
+                model.model,
                 input_data=torch.ones(
                     cfg.dataset.batch_size_train,
                     cfg.get_model().time_step_window_size,
