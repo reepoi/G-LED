@@ -365,7 +365,8 @@ class Macro(TrajectoryDataset):
             self.trajectories_macro.append(batch_macro)
 
         self.trajectories_micro = torch.cat(self.trajectories_micro)
-        self.trajectories_macro = torch.cat(self.trajectories_macro)
+        self.trajectories_macro_no_noise = torch.cat(self.trajectories_macro)
+        self.trajectories_macro = self.trajectories_macro_no_noise + torch.randn_like(self.trajectories_macro_no_noise) * self.cfg.forecast_additive_noise_std
 
         # assert self.trajectories_micro.shape[:3] == self.trajectories_macro.shape[:3]
         try:

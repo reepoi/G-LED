@@ -92,7 +92,7 @@ class Split(str, enum.Enum):
 class Macro(conf.dataset.Dataset):
     defaults: List[Any] = hydra_orm.utils.make_defaults_list([
         {'/dataset': omegaconf.MISSING},
-        {'/model': omegaconf.MISSING},
+        {'/model': None},
         '_self_',
     ])
     dataset = orm.OneToManyField(conf.dataset.Dataset, default=omegaconf.MISSING)
@@ -101,7 +101,9 @@ class Macro(conf.dataset.Dataset):
     initial_sequence_time_step_count: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=omegaconf.MISSING)
     forecast_time_step_count: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=omegaconf.MISSING)
 
-    model = orm.OneToManyField(Trained, required=False, default=omegaconf.MISSING)
+    model = orm.OneToManyField(Trained, required=False, default=None)
+
+    forecast_additive_noise_std: float = orm.make_field(orm.ColumnRequired(sa.Double), default=0.)
 
     @property
     def trajectory_time_step_count_macro(self):
