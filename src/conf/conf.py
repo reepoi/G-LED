@@ -91,9 +91,9 @@ class Split(str, enum.Enum):
 
 class Macro(conf.dataset.Dataset):
     defaults: List[Any] = hydra_orm.utils.make_defaults_list([
+        '_self_',
         {'/dataset': omegaconf.MISSING},
         {'/model': None},
-        '_self_',
     ])
     dataset = orm.OneToManyField(conf.dataset.Dataset, default=omegaconf.MISSING)
     split: Split = orm.make_field(orm.ColumnRequired(sa.Enum(Split)), default=omegaconf.MISSING)
