@@ -99,7 +99,9 @@ class Macro(conf.dataset.Dataset):
     split: Split = orm.make_field(orm.ColumnRequired(sa.Enum(Split)), default=omegaconf.MISSING)
     initial_sequence_time_step_start: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=omegaconf.MISSING)
     initial_sequence_time_step_count: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=omegaconf.MISSING)
+    use_sliding_initial_sequence: bool = orm.make_field(orm.ColumnRequired(sa.Boolean), default=False)
     forecast_time_step_count: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=omegaconf.MISSING)
+
 
     model = orm.OneToManyField(Trained, required=False, default=None)
 

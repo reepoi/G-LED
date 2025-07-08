@@ -63,17 +63,40 @@ class TrainSequential(pl.LightningModule):
     def setup(self, stage):
         pass
 
+    def forecast_over_windows(self, windows, flatten_solution=False):
+        # process windows of length 1 or more
+        if (time_step_count := windows.shape[2]) > self.cfg.get_model().time_step_window_size:
+            raise ValueError(
+                f'The time step count of the windows ({time_step_count}) must be less than or equal to model.time_step_window_size ({self.cfg.get_model().time_step_window_size}).'
+                f' Please pass windows with at most {self.cfg.get_model().time_step_window_size} time steps, or set model.time_step_window_size={time_step_count} or larger.'
+            )
+        window_pred_batch = [windows[:, 0]]  # save the initial window
+        for window_idx in range(windows.shape[1]):
+            window_shifted_by_1_pred, *_ = self.model(inputs_embeds=windows[:, window_idx], past=None)
+            window_pred_batch.append(window_shifted_by_1_pred[:, -1:])
+
+        window_pred_batch = torch.cat(window_pred_batch, dim=1)
+        batch_size, time_count = window_pred_batch.shape[:2]
+
+        window_pred_batch = window_pred_batch.view(batch_size, time_count, self.cfg.dataset.solution_dimension, *self.cfg.dataset.coarse_dimensions())
+        if flatten_solution:
+            window_pred_batch = window_pred_batch.view(batch_size, time_count, self.cfg.dataset.solution_dimension * self.cfg.dataset.embedding_dimension)
+
+        return window_pred_batch
+
     def forecast(self, forecast_time_step_count, initial_sequence, flatten_solution=False):
         # process warm-up sequence of length 1 or more
         if (time_step_count := initial_sequence.shape[1]) > self.cfg.get_model().time_step_window_size:
             raise ValueError(
                 f'The time step count of the initial sequence ({time_step_count}) must be less than or equal to model.time_step_window_size ({self.cfg.get_model().time_step_window_size}).'
-                f' Please pass a initial sequence with at most {self.cfg.get_model().time_step_window_size} time steps, or set model.time_step_window_size={time_step_count} or larger.'
+                f' Please pass an initial sequence with at most {self.cfg.get_model().time_step_window_size} time steps, or set model.time_step_window_size={time_step_count} or larger.'
             )
         window_shifted_by_1_pred, cached_keys_values, *_ = self.model(inputs_embeds=initial_sequence, past=None)
         window_pred_batch = [
-            initial_sequence[:, :1],  # save the initial state
-            window_shifted_by_1_pred,
+            # initial_sequence[:, :1],  # save the initial state
+            # window_shifted_by_1_pred,
+            initial_sequence,  # save the initial state
+            window_shifted_by_1_pred[:, -1:],
         ]
         window_pred = window_shifted_by_1_pred[:, -1:]  # iterate the latest state
         for time_step in range(1, forecast_time_step_count):  # start at 1 because we already forecasted one time step past the warm-up sequence

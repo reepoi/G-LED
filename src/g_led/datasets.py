@@ -346,18 +346,29 @@ class Macro(TrajectoryDataset):
         self.trajectories_micro = []
         self.trajectories_macro = []
         for batch in dataloader:
-            batch_micro = batch[:, cfg.initial_sequence_time_step_start:cfg.initial_sequence_time_step_count+cfg.forecast_time_step_count]
+            batch_micro = batch[:, cfg.initial_sequence_time_step_start:][:, :cfg.initial_sequence_time_step_count+cfg.forecast_time_step_count]
 
             if model is None:
                 initial_sequence = downsampler(batch_micro)
                 batch_macro = initial_sequence
             elif isinstance(model, models.TrainSequential):
-                with torch.no_grad():
+                if self.cfg.use_sliding_initial_sequence:
+                    windows = downsampler(batch_micro, flatten_solution=True)
+                    windows = rearrange(
+                        windows
+                        .unfold(1, self.cfg.model.conf.model.time_step_window_size, 1)
+                        [:, :-1],  # discard last window because its prediction time step exceeds the batch_micro length
+                        'trajectory trajectory_window embedding_dimension time -> trajectory trajectory_window time embedding_dimension'
+                    )
+                    with torch.no_grad():
+                        batch_macro = model.forecast_over_windows(windows.to(model.device)).to(windows.device)
+                else:
                     initial_sequence = downsampler(
                         batch_micro[:, :cfg.initial_sequence_time_step_count],
                         flatten_solution=True,
                     )
-                    batch_macro = model.forecast(cfg.forecast_time_step_count, initial_sequence.to(model.device)).to(initial_sequence.device)
+                    with torch.no_grad():
+                        batch_macro = model.forecast(cfg.forecast_time_step_count, initial_sequence.to(model.device)).to(initial_sequence.device)
             else:
                 raise NotImplementedError(f"Prediction in the Macro dataset not implemented implemented for '{model.__class__}'")
 
@@ -371,9 +382,9 @@ class Macro(TrajectoryDataset):
         # assert self.trajectories_micro.shape[:3] == self.trajectories_macro.shape[:3]
         try:
             pack([self.trajectories_micro, self.trajectories_macro], 'trajectory time_step component *')
-        except EinopsError as e:
+        except (EinopsError, RuntimeError) as e:
             log.critical(
-                "Micro and macro trajectories do not have the same number of trajectories, time steps, or components. See the following einops.EinopsError for details:\n%s",
+                "Micro and macro trajectories do not have the same number of trajectories, time steps, or components. See the following error for details:\n%s",
                 e,
             )
             raise RuntimeError('Trajectories did not pass validation. See the logs for more details.')
