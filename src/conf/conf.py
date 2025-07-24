@@ -107,6 +107,8 @@ class Macro(conf.dataset.Dataset):
 
     forecast_additive_noise_std: float = orm.make_field(orm.ColumnRequired(sa.Double), default=0.)
 
+    transformer_use_key_value_cache: bool = orm.make_field(orm.ColumnRequired(sa.Boolean), default=False)
+
     @property
     def trajectory_time_step_count_macro(self):
         return self.forecast_time_step_count

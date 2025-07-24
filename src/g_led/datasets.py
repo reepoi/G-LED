@@ -352,11 +352,11 @@ class Macro(TrajectoryDataset):
                 initial_sequence = downsampler(batch_micro)
                 batch_macro = initial_sequence
             elif isinstance(model, models.TrainSequential):
-                if self.cfg.use_sliding_initial_sequence:
+                if cfg.use_sliding_initial_sequence:
                     windows = downsampler(batch_micro, flatten_solution=True)
                     windows = rearrange(
                         windows
-                        .unfold(1, self.cfg.model.conf.model.time_step_window_size, 1)
+                        .unfold(1, cfg.model.conf.model.time_step_window_size, 1)
                         [:, :-1],  # discard last window because its prediction time step exceeds the batch_micro length
                         'trajectory trajectory_window embedding_dimension time -> trajectory trajectory_window time embedding_dimension'
                     )
@@ -368,7 +368,11 @@ class Macro(TrajectoryDataset):
                         flatten_solution=True,
                     )
                     with torch.no_grad():
-                        batch_macro = model.forecast(cfg.forecast_time_step_count, initial_sequence.to(model.device)).to(initial_sequence.device)
+                        batch_macro = model.forecast(
+                            cfg.forecast_time_step_count,
+                            initial_sequence.to(model.device),
+                            use_key_value_cache=cfg.transformer_use_key_value_cache,
+                        ).to(initial_sequence.device)
             else:
                 raise NotImplementedError(f"Prediction in the Macro dataset not implemented implemented for '{model.__class__}'")
 

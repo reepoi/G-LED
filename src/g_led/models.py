@@ -84,7 +84,7 @@ class TrainSequential(pl.LightningModule):
 
         return window_pred_batch
 
-    def forecast(self, forecast_time_step_count, initial_sequence, flatten_solution=False):
+    def forecast(self, forecast_time_step_count, initial_sequence, flatten_solution=False, use_key_value_cache=False):
         # process warm-up sequence of length 1 or more
         if (time_step_count := initial_sequence.shape[1]) > self.cfg.get_model().time_step_window_size:
             raise ValueError(
@@ -100,11 +100,14 @@ class TrainSequential(pl.LightningModule):
         ]
         window_pred = window_shifted_by_1_pred[:, -1:]  # iterate the latest state
         for time_step in range(1, forecast_time_step_count):  # start at 1 because we already forecasted one time step past the warm-up sequence
-            if cached_keys_values[0][0].shape[2] < self.cfg.get_model().time_step_window_size:
-                # cached_keys_values[*][0].shape[2] is the number of time steps processed in the trajectory (i.e., in the context of LLMs, the number of tokens in the context)
-                window_shifted_by_1_pred, cached_keys_values, *_ = self.model(inputs_embeds=window_pred, past=cached_keys_values)
-            else:
-                # drop oldest key/value to maintain fixed context window
+            # if cached_keys_values[0][0].shape[2] < self.cfg.get_model().time_step_window_size:
+            #     print('HERE')
+            #     # cached_keys_values[*][0].shape[2] is the number of time steps processed in the trajectory (i.e., in the context of LLMs, the number of tokens in the context)
+            #     window_shifted_by_1_pred, cached_keys_values, *_ = self.model(inputs_embeds=window_pred, past=cached_keys_values)
+            # else:
+
+            # drop oldest key/value to maintain fixed context window
+            if use_key_value_cache:
                 cached_keys_values = [
                     [
                         # keys
@@ -114,7 +117,9 @@ class TrainSequential(pl.LightningModule):
                     ]
                     for layer in range(self.cfg.get_model().attention_layer_count)
                 ]
-                window_shifted_by_1_pred, cached_keys_values, *_ = self.model(inputs_embeds=window_pred, past=cached_keys_values)
+            else:
+                cached_keys_values = None
+            window_shifted_by_1_pred, cached_keys_values, *_ = self.model(inputs_embeds=window_pred, past=cached_keys_values)
             window_pred = window_shifted_by_1_pred
             window_pred_batch.append(window_pred)
         window_pred_batch = torch.cat(window_pred_batch, dim=1)
