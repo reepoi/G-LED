@@ -1,5 +1,4 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import lightning.pytorch as pl
 from einops import reduce
@@ -7,38 +6,8 @@ from einops import reduce
 from imagen_pytorch import ElucidatedImagen, ImagenTrainer, Unet3D
 
 from conf import conf, model
-from g_led import utils
+from g_led import downsamplers, utils
 from g_led.transformer.sequentialModel import SequentialModel as Transformer
-
-
-class Downsampler(nn.Module):
-    def __init__(self, cfg):
-        super().__init__()
-        self.cfg = cfg
-        self.downsampler = nn.Upsample(size=cfg.coarse_dimensions(), mode=cfg.upsample_mode)
-
-    def forward(self, batch, flatten_solution=False):
-        batch_size, time_count = batch.shape[:2]
-        batch_macro = self.downsampler(
-            batch.view(-1, self.cfg.solution_dimension, *self.cfg.dimensions())
-        ).view(batch_size, time_count, self.cfg.solution_dimension, *self.cfg.coarse_dimensions())
-        if flatten_solution:
-            batch_macro = batch_macro.view(batch_size, time_count, self.cfg.solution_dimension * self.cfg.embedding_dimension)
-        return batch_macro
-
-
-class Upsampler(nn.Module):
-    def __init__(self, cfg):
-        super().__init__()
-        self.cfg = cfg
-        self.upsampler = nn.Upsample(size=cfg.dimensions(), mode=cfg.upsample_mode)
-
-    def forward(self, batch):
-        batch_size, time_count = batch.shape[:2]
-        batch_micro = self.upsampler(
-            batch.view(-1, self.cfg.solution_dimension, *self.cfg.coarse_dimensions())
-        ).view(batch_size, time_count, self.cfg.solution_dimension, *self.cfg.dimensions())
-        return batch_micro
 
 
 class TrainSequential(pl.LightningModule):
@@ -234,7 +203,7 @@ class TrainUpsampler(pl.LightningModule):
 
 def get_model(cfg, ckpt_path=None):
     if isinstance(cfg.model, model.Transformer):
-        downsampler = Downsampler(cfg.dataset)
+        downsampler = downsamplers.get_downsampler(cfg.dataset)
         transformer = Transformer(cfg.model, cfg.dataset.solution_dimension * cfg.dataset.embedding_dimension)
         if ckpt_path is None:
             return TrainSequential(cfg, downsampler, transformer)
@@ -269,8 +238,8 @@ def get_model(cfg, ckpt_path=None):
             condition_on_text=False,
             auto_normalize_img=False  # Han Gao make it false
         )
-        downsampler = Downsampler(cfg.dataset)
-        upsampler = Upsampler(cfg.dataset)
+        downsampler = downsamplers.get_downsampler(cfg.dataset)
+        upsampler = downsamplers.get_upsampler(cfg.dataset)
         imagen_trainer = ImagenTrainer(imagen, device=torch.device(cfg.device))
         if ckpt_path is None:
             return TrainUpsampler(cfg, downsampler, upsampler, imagen_trainer)

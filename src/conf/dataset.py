@@ -8,10 +8,14 @@ import hydra_orm.utils
 from hydra_orm import orm
 import sqlalchemy as sa
 
+import conf.downsampler
+
 
 class Dataset(orm.InheritableTable):
     defaults: List[Any] = hydra_orm.utils.make_defaults_list([
         '_self_',
+        dict(downsampler=omegaconf.MISSING),
+        dict(upsampler=omegaconf.MISSING),
     ])
     _data_dir: str = field(default=str(Path('/home/ttransue/out/g_led/data').resolve()))
 
@@ -55,6 +59,9 @@ class Dataset(orm.InheritableTable):
 
     dataloader_val_split_limits_val_on_train: Optional[int] = orm.make_field(sa.Column(sa.Integer), default=5)
     dataloader_val_split_limits_val: Optional[int] = orm.make_field(sa.Column(sa.Integer), default=2)
+
+    downsampler = orm.OneToManyField(conf.downsampler.Downsampler, required=False, default=None)
+    upsampler = orm.OneToManyField(conf.downsampler.Upsampler, required=False, default=None)
 
     def __post_init__(self):
         if self.trajectories_are_shared_across_splits:
@@ -200,10 +207,6 @@ class KuramotoSivashinsky1D(Dataset):
     def embedding_dimension(self):
         return self.coarse_dimension
 
-    @property
-    def upsample_mode(self):
-        return 'linear'
-
 
 class BackwardFacingStep2D(Dataset):
     dimension_width: int = orm.make_field(orm.ColumnRequired(sa.Integer), default=512)
@@ -224,10 +227,6 @@ class BackwardFacingStep2D(Dataset):
     @property
     def embedding_dimension(self):
         return self.coarse_dimension_width * self.coarse_dimension_length
-
-    @property
-    def upsample_mode(self):
-        return 'bilinear'
 
 
 class ChannelFlow3D(Dataset):
@@ -251,7 +250,3 @@ class ChannelFlow3D(Dataset):
     @property
     def embedding_dimension(self):
         return self.coarse_dimension_width * self.coarse_dimension_length * self.coarse_dimension_height
-
-    @property
-    def upsample_mode(self):
-        return 'trilinear'

@@ -9,6 +9,7 @@ import sqlalchemy as sa
 from hydra_orm import orm
 
 import conf.dataset
+import conf.downsampler
 import conf.model
 from g_led import utils
 
@@ -129,14 +130,13 @@ class Macro(conf.dataset.Dataset):
     def embedding_dimension(self):
         return self.dataset.embedding_dimension
 
-    @property
-    def upsample_mode(self):
-        return self.dataset.upsample_mode
-
 
 orm.store_config(Conf)
 orm.store_config(conf.dataset.KuramotoSivashinsky1D, group=Conf.dataset.key, name=f'_{conf.dataset.KuramotoSivashinsky1D.__name__}')
 orm.store_config(conf.dataset.BackwardFacingStep2D, group=Conf.dataset.key, name=f'_{conf.dataset.BackwardFacingStep2D.__name__}')
+orm.store_config(conf.downsampler.DownsamplerLinear, group=f'{Conf.dataset.key}/{conf.dataset.Dataset.downsampler.key}')
+orm.store_config(conf.downsampler.DownsamplerGaussian, group=f'{Conf.dataset.key}/{conf.dataset.Dataset.downsampler.key}')
+orm.store_config(conf.downsampler.UpsamplerLinear, group=f'{Conf.dataset.key}/{conf.dataset.Dataset.upsampler.key}')
 orm.store_config(conf.model.Transformer, group=Conf.model.key, name=f'_{conf.model.Transformer.__name__}')
 orm.store_config(conf.model.Imagen, group=Conf.model.key, name=f'_{conf.model.Imagen.__name__}')
 orm.store_config(Trained, group=Conf.model.key)

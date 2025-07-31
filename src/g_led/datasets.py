@@ -415,25 +415,26 @@ class Macro(TrajectoryDataset):
 
 
 def get_dataset(cfg):
-    if isinstance(cfg, dataset.KuramotoSivashinsky1D):
-        return KuramotoSivashinksy1D(cfg)
-    elif isinstance(cfg, dataset.BackwardFacingStep2D):
-        return BackwardFacingStep2D(cfg)
-    elif isinstance(cfg, dataset.ChannelFlow3D):
-        raise NotImplementedError()
-    elif isinstance(cfg, conf.Macro):
-        with pl.utilities.seed.isolate_rng():
-            if cfg.model is None:
-                model = None
-            else:
-                model = models.get_model(cfg)
-        with pl.utilities.seed.isolate_rng():
-            ds = get_dataset(cfg.dataset)
-            ds.prepare_data()
-            ds.setup('predict')
-        return Macro(cfg, ds, models.Downsampler(cfg.dataset), model)
-    else:
-        raise ValueError(f'Unknown dataset: {cfg}')
+    match cfg:
+        case dataset.KuramotoSivashinsky1D():
+            return KuramotoSivashinksy1D(cfg)
+        case dataset.BackwardFacingStep2D():
+            return BackwardFacingStep2D(cfg)
+        case dataset.ChannelFlow3D():
+            raise NotImplementedError()
+        case conf.Macro():
+            with pl.utilities.seed.isolate_rng():
+                if cfg.model is None:
+                    model = None
+                else:
+                    model = models.get_model(cfg)
+            with pl.utilities.seed.isolate_rng():
+                ds = get_dataset(cfg.dataset)
+                ds.prepare_data()
+                ds.setup('predict')
+            return Macro(cfg, ds, models.get_downsampler(cfg.dataset), model)
+        case _:
+            raise ValueError(f'Unknown dataset: {cfg}')
 
 
 @hydra.main(**utils.HYDRA_INIT)
