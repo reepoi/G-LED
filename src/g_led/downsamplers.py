@@ -44,6 +44,7 @@ class DownsamplerGaussian(Downsampler):
         self.downsampler = getattr(nn, f'Conv{len(self.cfg.dimensions())}d')(
             in_channels=self.cfg.solution_dimension,
             out_channels=self.cfg.solution_dimension,
+            groups=self.cfg.solution_dimension,
             kernel_size=kernel_size,
             bias=False,
             stride=kernel_size // 2,
@@ -53,7 +54,7 @@ class DownsamplerGaussian(Downsampler):
         spatial_dims = self.downsampler.weight.shape[2:]
         self.downsampler.weight = nn.Parameter(
             self.init_gaussian_kernel(spatial_dims, 0.4 * (kernel_size // 2)).expand(
-                self.downsampler.out_channels, self.downsampler.in_channels, *spatial_dims
+                self.downsampler.out_channels, 1, *spatial_dims
             ).clone(),
             requires_grad=False,
         )
