@@ -54,7 +54,7 @@ class DownsamplerGaussian(Downsampler):
         self.downsampler.weight = nn.Parameter(
             self.init_gaussian_kernel(spatial_dims, 0.4 * (kernel_size // 2)).expand(
                 self.downsampler.out_channels, self.downsampler.in_channels, *spatial_dims
-            ),
+            ).clone(),
             requires_grad=False,
         )
 
