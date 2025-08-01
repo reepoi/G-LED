@@ -65,7 +65,7 @@ class DownsamplerGaussian(Downsampler):
     def init_gaussian_kernel(kernel_size, sigma, device=None, dtype=torch.float32):
         kernel = np.zeros(kernel_size)
         # set element at the middle to one, a dirac delta
-        kernel[[s//2 for s in kernel_size]] = 1.
+        kernel[tuple(s//2 for s in kernel_size)] = 1.
         # gaussian-smooth the dirac, resulting in a gaussian filter mask
         kernel = torch.from_numpy(scipy.ndimage.gaussian_filter(kernel, sigma))
         return kernel[[None] * kernel.ndim].to(device=device, dtype=dtype)
