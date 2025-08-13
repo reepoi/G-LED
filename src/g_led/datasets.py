@@ -13,7 +13,7 @@ from einops import rearrange, pack, EinopsError
 from tqdm import tqdm
 
 from conf import conf, dataset
-from g_led import models, utils
+from g_led import models, downsamplers, utils
 
 
 log = utils.getLoggerByFilename(__file__)
@@ -432,7 +432,7 @@ def get_dataset(cfg):
                 ds = get_dataset(cfg.dataset)
                 ds.prepare_data()
                 ds.setup('predict')
-            return Macro(cfg, ds, models.get_downsampler(cfg.dataset), model)
+            return Macro(cfg, ds, downsamplers.get_downsampler(cfg.dataset), model)
         case _:
             raise ValueError(f'Unknown dataset: {cfg}')
 
