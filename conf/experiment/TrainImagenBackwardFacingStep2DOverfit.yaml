@@ -9,8 +9,8 @@ model:
   learning_rate: 0.
   learning_rate_decay: 0.
 dataset:
-  macro_time_step_count_train: 150
-  macro_time_step_count_val: 50
+  macro_time_step_count_train: 15
+  macro_time_step_count_val: 10
   macro_time_step_count_test: 10
 
   time_step_window_size_train: 10
