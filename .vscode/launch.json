@@ -6,7 +6,7 @@
             "type": "python",
             "request": "launch",
             "name": "Train sequential",
-            "program": "/home/sci/ttransue/GitHub/G-LED/src/g_led/data/data_bfs_preprocess.py",
+            "program": "/home/ttransue/GitHub/G-LED/src/g_led/data/data_bfs_preprocess.py",
             "args": [
                 "rng_seed=0",
                 "model=TransformerBackwardFacingStep2D",
@@ -20,7 +20,7 @@
             "type": "python",
             "request": "launch",
             "name": "Train upsampler",
-            "program": "/home/sci/ttransue/GitHub/G-LED/src/g_led/main_upsampler.py",
+            "program": "/home/ttransue/GitHub/G-LED/src/g_led/main_upsampler.py",
             "args": [
                 "dataset=KuramotoSivashinsky1DSize1",
                 "model=ImagenKuramotoSivashinsky1D",
@@ -39,8 +39,29 @@
         {
             "type": "python",
             "request": "launch",
+            "name": "Debug dataset",
+            "program": "/home/ttransue/GitHub/G-LED/src/g_led/datasets.py",
+            "args": [
+                "+experiment=EvalTrainedImagenBackwardFacingStep2D",
+                "model.conf=yli80x1e",
+                "model.ckpt_filename=epoch_0.ckpt",
+                "dataset=Macro",
+                "model@dataset.model=Trained",
+                "dataset.model.conf=rj700zkc",
+                "dataset.model.ckpt_filename=epoch_217__forecast_time_step_count_91.ckpt",
+                "dataset.split=TRAIN",
+                "dataset.initial_sequence_time_step_start=0",
+                "dataset.initial_sequence_time_step_count=1"
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "${input:gpu}"
+            }
+        },
+        {
+            "type": "python",
+            "request": "launch",
             "name": "Run temp",
-            "program": "/home/sci/ttransue/GitHub/G-LED/src/g_led/temp.py",
+            "program": "/home/ttransue/GitHub/G-LED/src/g_led/temp.py",
             "args": [
             ],
             "env": {
