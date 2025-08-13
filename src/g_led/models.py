@@ -181,6 +181,7 @@ class TrainUpsampler(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         self.optimizers().step()  # increment global step for logging and checkpointing
+        self.log('learning_rate', self.imagen_trainer.get_lr(1), on_epoch=True)
 
         batch_macro_interpolated_to_micro = self.upsampler(self.downsampler(batch))
         loss = self.imagen_trainer(
