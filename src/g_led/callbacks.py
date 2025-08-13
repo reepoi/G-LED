@@ -73,7 +73,7 @@ class LogStatsSequential(pl.callbacks.Callback):
         self.log(f'{self.prefixes[dataset_idx]}_relative_rmse_max', outputs['relative_rmse_max'], reduce_fx='max', **log_kwargs)
 
     def on_validation_end(self, trainer, pl_module):
-        if trainer.sanity_checking:
+        if trainer.sanity_checking or 'val_on_train_relative_rmse_max' not in trainer.callback_metrics:
             return
         should_increment_forecast_time_step_count = (
             trainer.callback_metrics['val_on_train_relative_rmse_max'] < pl_module.cfg.model.march_tolerance
